@@ -1,0 +1,52 @@
+{
+  "mappings": {
+    "io/github/keoz5/zombiezcompanion/mixin/BossBarHudAccessor": {
+      "bossBars": "field_2060:Ljava/util/Map;"
+    },
+    "io/github/keoz5/zombiezcompanion/mixin/GameRendererAccessor": {
+      "getFov": "method_3196(Lnet/minecraft/class_4184;FZ)F"
+    },
+    "io/github/keoz5/zombiezcompanion/mixin/GameRendererMixin": {
+      "getFov": "Lnet/minecraft/class_757;method_3196(Lnet/minecraft/class_4184;FZ)F"
+    },
+    "io/github/keoz5/zombiezcompanion/mixin/ItemPickupMixin": {
+      "onItemPickupAnimation": "Lnet/minecraft/class_634;method_11150(Lnet/minecraft/class_2775;)V"
+    },
+    "io/github/keoz5/zombiezcompanion/mixin/LightmapTextureManagerMixin": {
+      "Lnet/minecraft/client/option/SimpleOption;getValue()Ljava/lang/Object;": "Lnet/minecraft/class_7172;method_41753()Ljava/lang/Object;",
+      "update(F)V": "Lnet/minecraft/class_765;method_3313(F)V"
+    },
+    "io/github/keoz5/zombiezcompanion/mixin/PlayerEntityRendererMixin": {
+      "renderLabelIfPresent": "Lnet/minecraft/class_1007;method_4213(Lnet/minecraft/class_10055;Lnet/minecraft/class_2561;Lnet/minecraft/class_4587;Lnet/minecraft/class_4597;I)V"
+    },
+    "io/github/keoz5/zombiezcompanion/mixin/TitleScreenMixin": {
+      "init": "Lnet/minecraft/class_442;method_25426()V"
+    }
+  },
+  "data": {
+    "named:intermediary": {
+      "io/github/keoz5/zombiezcompanion/mixin/BossBarHudAccessor": {
+        "bossBars": "field_2060:Ljava/util/Map;"
+      },
+      "io/github/keoz5/zombiezcompanion/mixin/GameRendererAccessor": {
+        "getFov": "method_3196(Lnet/minecraft/class_4184;FZ)F"
+      },
+      "io/github/keoz5/zombiezcompanion/mixin/GameRendererMixin": {
+        "getFov": "Lnet/minecraft/class_757;method_3196(Lnet/minecraft/class_4184;FZ)F"
+      },
+      "io/github/keoz5/zombiezcompanion/mixin/ItemPickupMixin": {
+        "onItemPickupAnimation": "Lnet/minecraft/class_634;method_11150(Lnet/minecraft/class_2775;)V"
+      },
+      "io/github/keoz5/zombiezcompanion/mixin/LightmapTextureManagerMixin": {
+        "Lnet/minecraft/client/option/SimpleOption;getValue()Ljava/lang/Object;": "Lnet/minecraft/class_7172;method_41753()Ljava/lang/Object;",
+        "update(F)V": "Lnet/minecraft/class_765;method_3313(F)V"
+      },
+      "io/github/keoz5/zombiezcompanion/mixin/PlayerEntityRendererMixin": {
+        "renderLabelIfPresent": "Lnet/minecraft/class_1007;method_4213(Lnet/minecraft/class_10055;Lnet/minecraft/class_2561;Lnet/minecraft/class_4587;Lnet/minecraft/class_4597;I)V"
+      },
+      "io/github/keoz5/zombiezcompanion/mixin/TitleScreenMixin": {
+        "init": "Lnet/minecraft/class_442;method_25426()V"
+      }
+    }
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "required": true,
+  "minVersion": "0.8",
+  "package": "io.github.keoz5.zombiezcompanion.mixin",
+  "compatibilityLevel": "JAVA_21",
+  "client": [
+    "BossBarHudAccessor",
+    "GameRendererAccessor",
+    "GameRendererMixin",
+    "ItemPickupMixin",
+    "LightmapTextureManagerMixin",
+    "PlayerEntityRendererMixin",
+    "TitleScreenMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  },
+  "refmap": "zombiez-companion-refmap.json"
+}
