@@ -1,6 +1,9 @@
 package io.github.keoz5.zombiezcompanion.modules.minievents;
 
+import io.github.keoz5.zombiezcompanion.ModInfo;
 import com.mojang.blaze3d.systems.RenderSystem;
+import com.mojang.blaze3d.vertex.PoseStack;
+import com.mojang.blaze3d.vertex.VertexConsumer;
 import io.github.keoz5.zombiezcompanion.ZombieZCompanionClient;
 import io.github.keoz5.zombiezcompanion.config.ConfigManager;
 import io.github.keoz5.zombiezcompanion.config.HudConfig;
@@ -38,49 +41,52 @@ import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-import net.fabricmc.fabric.api.client.rendering.v1.WorldRenderContext;
-import net.fabricmc.fabric.api.client.rendering.v1.WorldRenderEvents;
-import net.minecraft.entity.Entity;
-import net.minecraft.entity.EquipmentSlot;
-import net.minecraft.entity.LivingEntity;
-import net.minecraft.entity.mob.ZombieEntity;
-import net.minecraft.entity.player.PlayerEntity;
-import net.minecraft.item.ItemStack;
-import net.minecraft.item.Items;
-import net.minecraft.client.render.RenderLayer;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.Box;
-import net.minecraft.util.math.Vec3i;
-import net.minecraft.util.math.Vec3d;
-import net.minecraft.text.Text;
-import net.minecraft.block.entity.BlockEntity;
-import net.minecraft.block.entity.EnderChestBlockEntity;
-import net.minecraft.world.chunk.WorldChunk;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.font.TextRenderer;
-import net.minecraft.client.gui.DrawContext;
-import net.minecraft.client.gui.hud.BossBarHud;
-import net.minecraft.client.gui.hud.ClientBossBar;
-import net.minecraft.client.render.Camera;
-import net.minecraft.client.gui.screen.Screen;
-import net.minecraft.client.util.math.MatrixStack;
-import net.minecraft.client.render.VertexConsumer;
-import net.minecraft.client.render.VertexConsumerProvider;
-import net.minecraft.client.render.Frustum;
-import net.minecraft.text.MutableText;
-import net.minecraft.text.StringVisitable;
+import net.fabricmc.fabric.api.client.rendering.v1.level.LevelRenderContext;
+import net.fabricmc.fabric.api.client.rendering.v1.level.LevelRenderEvents;
+import net.minecraft.client.Camera;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.Font;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.components.BossHealthOverlay;
+import net.minecraft.client.gui.components.LerpingBossEvent;
+import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.renderer.MultiBufferSource;
+import net.minecraft.client.renderer.rendertype.RenderType;
+import net.minecraft.client.renderer.culling.Frustum;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.Vec3i;
+import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.FormattedText;
+import net.minecraft.network.chat.MutableComponent;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.EquipmentSlot;
+import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.monster.zombie.Zombie;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
+import net.minecraft.world.level.block.entity.BlockEntity;
+import net.minecraft.world.level.block.entity.EnderChestBlockEntity;
+import net.minecraft.world.level.chunk.LevelChunk;
+import net.minecraft.world.phys.AABB;
+import net.minecraft.world.phys.Vec3;
 
 public final class MiniEventsModule
 implements Module {
     public static final String ID = "mini_events";
     private static final long COLIS_TTL_MS = 300000L;
+    // Safety net: an event waypoint older than this is removed even if the server's
+    // "departure" chat/bossbar was never detected (e.g. player disconnected mid-event).
+    // Prevents lingering markers and duplicates on reconnect. Still-active events near
+    // a connected player are re-created on the next tick, so the removal is invisible.
+    private static final long EVENT_WAYPOINT_SAFETY_TTL_MS = 300000L;
     private static final long COLIS_SEARCH_MS = 60000L;
     private static final long TOAST_MS = 3500L;
     private static final long TOAST_FADE_MS = 500L;
     private static final int SCAN_INTERVAL_TICKS = 5;
     private static final double MAX_DETECTION_RANGE = 100.0;
     private static final double COLIS_MAX_RANGE = 96.0;
-    private static final String SPAWN_ENDPOINT = "https://zombiez-companion-api.keoz5.workers.dev";
+    private static final String SPAWN_ENDPOINT = ModInfo.API_BASE;
     private static final long SPAWN_FETCH_INTERVAL_MS = 60000L;
     private long nextSpawnFetchMs;
     private final LinkedHashMap<UUID, ActiveEvent> entityEvents = new LinkedHashMap();
@@ -127,7 +133,7 @@ implements Module {
 
     @Override
     public String description() {
-        return Text.translatable((String)"zombiezcompanion.module.mini_events.desc").getString();
+        return Component.translatable((String)"zombiezcompanion.module.mini_events.desc").getString();
     }
 
     @Override
@@ -153,7 +159,7 @@ implements Module {
     @Override
     public void onRegister(ModuleContext ctx) {
         this.configManager = ctx.configManager();
-        WorldRenderEvents.LAST.register(this::renderBeacons);
+        LevelRenderEvents.AFTER_TRANSLUCENT_TERRAIN.register(this::renderBeacons);
     }
 
     @Override
@@ -237,8 +243,8 @@ implements Module {
     }
 
     @Override
-    public void onClientTick(MinecraftClient client) {
-        if (client.player == null || client.world == null || !ZombieZDetector.isOnZombieZ()) {
+    public void onClientTick(Minecraft client) {
+        if (client.player == null || client.level == null || !ZombieZDetector.isOnZombieZ()) {
             this.reset();
             return;
         }
@@ -249,6 +255,7 @@ implements Module {
             this.scanFailleBossbar(client);
         }
         long nowMs = System.currentTimeMillis();
+        this.pruneStaleEventWaypoints(nowMs);
         if ((this.config().marchandTimer || this.config().worldBossTimer) && nowMs >= this.nextSpawnFetchMs) {
             this.fetchSpawns();
             this.nextSpawnFetchMs = nowMs + 60000L;
@@ -269,10 +276,10 @@ implements Module {
         long now = System.currentTimeMillis();
         if (++this.scanTick >= 5) {
             this.scanTick = 0;
-            List<LivingEntity> mobs = client.world.getEntitiesByClass(LivingEntity.class, client.player.getBoundingBox().expand(range), e -> !e.isRemoved() && !(e instanceof PlayerEntity));
+            List<LivingEntity> mobs = client.level.getEntitiesOfClass(LivingEntity.class, client.player.getBoundingBox().inflate(range), e -> !e.isRemoved() && !(e instanceof Player));
             HashSet<UUID> present = new HashSet<UUID>();
             for (LivingEntity mob : mobs) {
-                UUID uuid2 = mob.getUuid();
+                UUID uuid2 = mob.getUUID();
                 String name = MiniEventsModule.entityName(mob);
                 MiniEventType type = MiniEventsModule.identifyType(name);
                 if (type == null) {
@@ -295,7 +302,7 @@ implements Module {
             if (now > ((ActiveEvent)e.getValue()).expiresAt) {
                 return true;
             }
-            BlockEntity be = client.world.getBlockEntity((BlockPos)e.getKey());
+            BlockEntity be = client.level.getBlockEntity((BlockPos)e.getKey());
             return !(be instanceof EnderChestBlockEntity);
         });
         if (this.marchandWaypointId != null && this.marchandExpiresAt > 0L && now > this.marchandExpiresAt) {
@@ -321,7 +328,7 @@ implements Module {
     }
 
     @Override
-    public void onChatMessage(Text message, boolean overlay) {
+    public void onChatMessage(Component message, boolean overlay) {
         boolean inSpawn;
         if (message == null) {
             return;
@@ -342,7 +349,7 @@ implements Module {
         if (cfg.worldBoss) {
             this.handleWorldBossLine(txt, ascii);
         }
-        MinecraftClient mc = MinecraftClient.getInstance();
+        Minecraft mc = Minecraft.getInstance();
         boolean bl = inSpawn = mc.player != null && ZombieZMapData.isInSpawn(mc.player.getX(), mc.player.getZ());
         if (inSpawn) {
             return;
@@ -447,13 +454,50 @@ implements Module {
             refugeName = near != null ? near.name() : null;
         }
         return refugeName != null
-                ? Text.translatable("zombiezcompanion.mini_events.marchand.label_tp", base, refugeName).getString()
+                ? Component.translatable("zombiezcompanion.mini_events.marchand.label_tp", base, refugeName).getString()
                 : base;
     }
 
     private static String currentDimensionId() {
-        MinecraftClient mc = MinecraftClient.getInstance();
-        return mc.world != null ? mc.world.getRegistryKey().getValue().toString() : null;
+        Minecraft mc = Minecraft.getInstance();
+        return mc.level != null ? mc.level.dimension().identifier().toString() : null;
+    }
+
+    /**
+     * Time-based safety net over the chat/bossbar-driven removal. Deletes any event waypoint
+     * (marchand / assaut / world boss / faille) whose creation is older than the safety TTL,
+     * and clears the matching in-memory tracking id so detection can start clean. Guards
+     * against markers left behind when the departure message is missed (disconnect) and the
+     * duplicates that would otherwise appear on reconnect.
+     */
+    private void pruneStaleEventWaypoints(long now) {
+        MapConfig map = this.configManager.get().map;
+        boolean changed = map.waypoints.removeIf(w -> {
+            if (w.id == null || w.createdAt <= 0L) {
+                return false;
+            }
+            boolean isEvent = w.id.startsWith("marchand-") || w.id.startsWith("assaut-")
+                    || w.id.startsWith("worldboss-") || w.id.startsWith("faille-");
+            if (!isEvent || now - w.createdAt <= EVENT_WAYPOINT_SAFETY_TTL_MS) {
+                return false;
+            }
+            if (w.id.equals(this.marchandWaypointId)) {
+                this.marchandWaypointId = null;
+            }
+            if (w.id.equals(this.assautWaypointId)) {
+                this.assautWaypointId = null;
+            }
+            if (w.id.equals(this.bossWaypointId)) {
+                this.bossWaypointId = null;
+            }
+            if (w.id.equals(this.failleWaypointId)) {
+                this.failleWaypointId = null;
+            }
+            return true;
+        });
+        if (changed) {
+            this.configManager.save();
+        }
     }
 
     private void createMarchandWaypoint(int x, int y, int z, int zone, long now) {
@@ -462,7 +506,7 @@ implements Module {
         this.removeMarchandWaypoint(map);
         MapConfig.Waypoint wp = new MapConfig.Waypoint();
         wp.id = "marchand-" + now;
-        String base = Text.translatable((String)"zombiezcompanion.mini_events.marchand.label").getString();
+        String base = Component.translatable((String)"zombiezcompanion.mini_events.marchand.label").getString();
         wp.label = MiniEventsModule.labelWithRefuge(base, x, z, zone);
         wp.x = (double)x + 0.5;
         wp.y = y;
@@ -515,13 +559,13 @@ implements Module {
     }
 
     private void fetchSpawns() {
-        this.getAsync("https://zombiez-companion-api.keoz5.workers.dev/spawns").thenAccept(SpawnSync::update);
+        this.getAsync(ModInfo.API_BASE + "/spawns").thenAccept(SpawnSync::update);
     }
 
     private void postSpawn(boolean boss, long now) {
         String body = "{\"type\":\"" + (boss ? "world_boss" : "marchand") + "\",\"at\":" + now + "}";
         try {
-            HttpRequest req = HttpRequest.newBuilder().uri(URI.create("https://zombiez-companion-api.keoz5.workers.dev/spawns")).timeout(Duration.ofSeconds(5L)).header("Content-Type", "application/json").POST(HttpRequest.BodyPublishers.ofString(body)).build();
+            HttpRequest req = HttpRequest.newBuilder().uri(URI.create(ModInfo.API_BASE + "/spawns")).timeout(Duration.ofSeconds(5L)).header("Content-Type", "application/json").POST(HttpRequest.BodyPublishers.ofString(body)).build();
             HttpClients.SHARED.sendAsync(req, HttpResponse.BodyHandlers.discarding()).exceptionally(t -> null);
         }
         catch (Exception exception) {
@@ -550,43 +594,24 @@ implements Module {
         return local != null ? local : List.of();
     }
 
-    private void renderSpawnTimer(DrawContext ctx, MinecraftClient client, boolean boss, String elementId, String labelKey, double defaultFy) {
-        Object nextStr;
+    private void renderSpawnTimer(GuiGraphicsExtractor ctx, Minecraft client, boolean boss, String elementId, String labelKey, double defaultFy) {
         String elapsedStr;
         List<Long> spawns = this.effectiveSpawns(boss);
         long now = System.currentTimeMillis();
         if (spawns == null || spawns.isEmpty()) {
             elapsedStr = "\u2014";
-            nextStr = "\u2014";
         } else {
-            long elapsed;
             long last = spawns.get(spawns.size() - 1);
             elapsedStr = MiniEventsModule.fmtDuration(now - last);
-            long minIv = 1200000L;
-            long maxIv = 2400000L;
-            if (spawns.size() >= 3) {
-                long lo = Long.MAX_VALUE;
-                long hi = Long.MIN_VALUE;
-                for (int i = 1; i < spawns.size(); ++i) {
-                    long d = spawns.get(i) - spawns.get(i - 1);
-                    if (d < lo) {
-                        lo = d;
-                    }
-                    if (d <= hi) continue;
-                    hi = d;
-                }
-                minIv = lo;
-                maxIv = hi;
-            }
-            int pct = (elapsed = now - last) <= minIv ? 0 : (elapsed >= maxIv ? 100 : (int)Math.round(100.0 * (double)(elapsed - minIv) / (double)Math.max(1L, maxIv - minIv)));
-            nextStr = pct + "% (" + MiniEventsModule.fmtDuration(minIv) + "-" + MiniEventsModule.fmtDuration(maxIv) + ")";
         }
-        MutableText line = Text.translatable((String)labelKey, (Object[])new Object[]{elapsedStr, nextStr});
-        TextRenderer tr = client.textRenderer;
-        int baseW = tr.getWidth((StringVisitable)line) + 12;
+        // Only the time since the last witnessed spawn \u2014 no predicted "next spawn": the real
+        // server intervals are unknown, so any estimate would be misleading.
+        MutableComponent line = Component.translatable((String)labelKey, (Object[])new Object[]{elapsedStr});
+        Font tr = client.font;
+        int baseW = tr.width((FormattedText)line) + 12;
         int baseH = 16;
-        int screenW = ctx.getScaledWindowWidth();
-        int screenH = ctx.getScaledWindowHeight();
+        int screenW = ctx.guiWidth();
+        int screenH = ctx.guiHeight();
         HudConfig hud = this.configManager.get().hud;
         double scale = HudAnchor.scale(hud, elementId);
         int sw = (int)Math.round((double)baseW * scale);
@@ -595,15 +620,15 @@ implements Module {
         int y = HudAnchor.resolveY(hud, elementId, screenH, sh, defaultFy);
         HudElements.report(elementId, x, y, sw, sh);
         int accent = (boss ? MiniEventType.WORLD_BOSS.colorRgb : MiniEventType.MARCHAND.colorRgb) | 0xFF000000;
-        ctx.getMatrices().push();
-        ctx.getMatrices().translate((float)x, (float)y, 0.0f);
+        ctx.pose().pushMatrix();
+        ctx.pose().translate((float)x, (float)y);
         if (scale != 1.0) {
-            ctx.getMatrices().scale((float)scale, (float)scale, 1.0f);
+            ctx.pose().scale((float)scale, (float)scale);
         }
         ctx.fill(0, 0, baseW, baseH, -1442840576);
         ctx.fill(0, 0, baseW, 1, accent);
-        ctx.drawTextWithShadow(tr, (Text)line, 6, 4, -1);
-        ctx.getMatrices().pop();
+        ctx.text(tr, (Component)line, 6, 4, -1);
+        ctx.pose().popMatrix();
     }
 
     private static String fmtDuration(long ms) {
@@ -643,9 +668,9 @@ implements Module {
         this.removeAssautWaypoint(map);
         MapConfig.Waypoint wp = new MapConfig.Waypoint();
         wp.id = "assaut-" + now;
-        String base = Text.translatable((String)"zombiezcompanion.mini_events.assaut.label").getString();
+        String base = Component.translatable((String)"zombiezcompanion.mini_events.assaut.label").getString();
         ZombieZMapData.Refuge near = ZombieZMapData.nearestRefuge(x, z);
-        wp.label = near != null ? Text.translatable((String)"zombiezcompanion.mini_events.marchand.label_tp", (Object[])new Object[]{base, near.name()}).getString() : base;
+        wp.label = near != null ? Component.translatable((String)"zombiezcompanion.mini_events.marchand.label_tp", (Object[])new Object[]{base, near.name()}).getString() : base;
         wp.x = (double)x + 0.5;
         wp.y = y;
         wp.z = (double)z + 0.5;
@@ -733,7 +758,7 @@ implements Module {
         this.removeWorldBossWaypoint(map);
         MapConfig.Waypoint wp = new MapConfig.Waypoint();
         wp.id = "worldboss-" + now;
-        String base = Text.translatable((String)"zombiezcompanion.mini_events.world_boss.label").getString();
+        String base = Component.translatable((String)"zombiezcompanion.mini_events.world_boss.label").getString();
         String title = name != null && !name.isBlank() ? base + " : " + name : base;
         wp.label = MiniEventsModule.labelWithRefuge(title, x, z, zone);
         wp.x = (double)x + 0.5;
@@ -753,19 +778,19 @@ implements Module {
         }
     }
 
-    private void scanWorldBossBossbar(MinecraftClient client) {
+    private void scanWorldBossBossbar(Minecraft client) {
         if (this.bossWaypointId != null) {
             return;
         }
-        BossBarHud hud = client.inGameHud.getBossBarHud();
+        BossHealthOverlay hud = client.gui.getBossOverlay();
         if (hud == null) {
             return;
         }
-        Map<UUID, ClientBossBar> bars = ((BossBarHudAccessor)hud).getBossBars();
+        Map<UUID, LerpingBossEvent> bars = ((BossBarHudAccessor)hud).getBossBars();
         if (bars == null || bars.isEmpty()) {
             return;
         }
-        for (ClientBossBar bar : bars.values()) {
+        for (LerpingBossEvent bar : bars.values()) {
             Matcher m;
             String ascii;
             if (bar.getName() == null || !(ascii = MiniEventsModule.stripDiacritics(bar.getName().getString()).toLowerCase(Locale.ROOT)).contains("world boss") || !(m = MARCHAND_COORDS.matcher(ascii)).find()) continue;
@@ -799,16 +824,16 @@ implements Module {
         this.bossWaypointId = null;
     }
 
-    private void scanFailleBossbar(MinecraftClient client) {
-        BossBarHud hud = client.inGameHud.getBossBarHud();
+    private void scanFailleBossbar(Minecraft client) {
+        BossHealthOverlay hud = client.gui.getBossOverlay();
         if (hud == null) {
             return;
         }
-        Map<UUID, ClientBossBar> bars = ((BossBarHudAccessor)hud).getBossBars();
+        Map<UUID, LerpingBossEvent> bars = ((BossBarHudAccessor)hud).getBossBars();
         long now = System.currentTimeMillis();
         boolean present = false;
         if (bars != null && !bars.isEmpty()) {
-            for (ClientBossBar bar : bars.values()) {
+            for (LerpingBossEvent bar : bars.values()) {
                 String ascii;
                 if (bar.getName() == null || !(ascii = MiniEventsModule.stripDiacritics(bar.getName().getString()).toLowerCase(Locale.ROOT)).contains("faille temporelle")) continue;
                 present = true;
@@ -827,19 +852,19 @@ implements Module {
         }
     }
 
-    private static double[] findFailleAnchor(MinecraftClient client) {
+    private static double[] findFailleAnchor(Minecraft client) {
         double[] dArray;
-        if (client.player == null || client.world == null) {
+        if (client.player == null || client.level == null) {
             return null;
         }
         LivingEntity best = null;
         double bestSq = Double.MAX_VALUE;
-        List<LivingEntity> mobs = client.world.getEntitiesByClass(LivingEntity.class, client.player.getBoundingBox().expand(64.0), e -> !e.isRemoved() && !(e instanceof PlayerEntity));
+        List<LivingEntity> mobs = client.level.getEntitiesOfClass(LivingEntity.class, client.player.getBoundingBox().inflate(64.0), e -> !e.isRemoved() && !(e instanceof Player));
         for (LivingEntity mob : mobs) {
             double sq;
             String ascii;
             String name = MiniEventsModule.entityName(mob);
-            if (name == null || !(ascii = MiniEventsModule.stripDiacritics(name).toLowerCase(Locale.ROOT)).contains("zombie temporel") || !((sq = mob.squaredDistanceTo((Entity)client.player)) < bestSq)) continue;
+            if (name == null || !(ascii = MiniEventsModule.stripDiacritics(name).toLowerCase(Locale.ROOT)).contains("zombie temporel") || !((sq = mob.distanceToSqr((Entity)client.player)) < bestSq)) continue;
             bestSq = sq;
             best = mob;
         }
@@ -887,28 +912,28 @@ implements Module {
         this.failleBossbarSeenAtMs = 0L;
     }
 
-    private void scanForColis(MinecraftClient client, int range, boolean searching) {
-        if (client.world == null || client.player == null) {
+    private void scanForColis(Minecraft client, int range, boolean searching) {
+        if (client.level == null || client.player == null) {
             return;
         }
-        BlockPos pp = client.player.getBlockPos();
+        BlockPos pp = client.player.blockPosition();
         int chunkRadius = (range >> 4) + 1;
         int pcx = pp.getX() >> 4;
         int pcz = pp.getZ() >> 4;
         long now = System.currentTimeMillis();
         for (int cx = pcx - chunkRadius; cx <= pcx + chunkRadius; ++cx) {
             for (int cz = pcz - chunkRadius; cz <= pcz + chunkRadius; ++cz) {
-                WorldChunk class_28182 = client.world.getChunk(cx, cz);
-                if (!(class_28182 instanceof WorldChunk)) continue;
-                WorldChunk wc = class_28182;
+                LevelChunk class_28182 = client.level.getChunk(cx, cz);
+                if (!(class_28182 instanceof LevelChunk)) continue;
+                LevelChunk wc = class_28182;
                 for (BlockEntity be : wc.getBlockEntities().values()) {
                     BlockPos pos;
-                    if (!(be instanceof EnderChestBlockEntity) || (pos = be.getPos()).getSquaredDistance((Vec3i)pp) > (double)range * (double)range || ZombieZMapData.isInAnyRefuge(pos.getX(), pos.getZ())) continue;
-                    BlockPos key = pos.toImmutable();
+                    if (!(be instanceof EnderChestBlockEntity) || (pos = be.getBlockPos()).distSqr((Vec3i)pp) > (double)range * (double)range || ZombieZMapData.isInAnyRefuge(pos.getX(), pos.getZ())) continue;
+                    BlockPos key = pos.immutable();
                     boolean firstSight = this.knownEnderChests.add(key);
                     if (!searching || !firstSight) continue;
                     boolean fresh = !this.colisEvents.containsKey(key);
-                    this.colisEvents.computeIfAbsent(key, k -> new ActiveEvent(MiniEventType.COLIS, Text.translatable((String)"zombiezcompanion.mini_events.colis.label").getString(), (double)pos.getX() + 0.5, (double)pos.getY() + 0.5, (double)pos.getZ() + 0.5, now + 300000L));
+                    this.colisEvents.computeIfAbsent(key, k -> new ActiveEvent(MiniEventType.COLIS, Component.translatable((String)"zombiezcompanion.mini_events.colis.label").getString(), (double)pos.getX() + 0.5, (double)pos.getY() + 0.5, (double)pos.getZ() + 0.5, now + 300000L));
                     if (!fresh) continue;
                     this.pushToast(MiniEventType.COLIS);
                 }
@@ -918,20 +943,20 @@ implements Module {
 
     private static String entityName(LivingEntity mob) {
         String s;
-        Text custom = mob.getCustomName();
+        Component custom = mob.getCustomName();
         if (custom != null && (s = custom.getString()) != null && !s.isBlank()) {
             return s;
         }
-        Text disp = mob.getName();
+        Component disp = mob.getName();
         return disp == null ? null : disp.getString();
     }
 
     private static MiniEventType identifyByEquipment(LivingEntity mob) {
-        if (!(mob instanceof ZombieEntity)) {
+        if (!(mob instanceof Zombie)) {
             return null;
         }
-        ItemStack head = mob.getEquippedStack(EquipmentSlot.HEAD);
-        if (head.isOf(Items.TNT)) {
+        ItemStack head = mob.getItemBySlot(EquipmentSlot.HEAD);
+        if (head.is(Items.TNT)) {
             return MiniEventType.BOMBE;
         }
         return null;
@@ -980,10 +1005,10 @@ implements Module {
         };
     }
 
-    private void renderBeacons(WorldRenderContext ctx) {
+    private void renderBeacons(LevelRenderContext ctx) {
         boolean failleActive;
-        MinecraftClient mc = MinecraftClient.getInstance();
-        if (mc.player == null || mc.world == null) {
+        Minecraft mc = Minecraft.getInstance();
+        if (mc.player == null || mc.level == null) {
             return;
         }
         if (!ZombieZDetector.isOnZombieZ()) {
@@ -996,56 +1021,49 @@ implements Module {
         if (this.entityEvents.isEmpty() && this.colisEvents.isEmpty() && !failleActive) {
             return;
         }
-        Camera camera = ctx.camera();
-        Vec3d cam = camera.getPos();
-        Frustum frustum = ctx.frustum();
-        MatrixStack matrices = ctx.matrixStack();
-        VertexConsumerProvider.Immediate immediate = mc.getBufferBuilders().getEntityVertexConsumers();
+        Camera camera = mc.gameRenderer.getMainCamera();
+        Vec3 cam = camera.position();
+        PoseStack matrices = ctx.poseStack();
+        MultiBufferSource.BufferSource immediate = mc.renderBuffers().bufferSource();
         boolean drewAny = false;
-        matrices.push();
+        matrices.pushPose();
         for (ActiveEvent ev : this.entityEvents.values()) {
-            if (!WaypointsModule.isBeaconVisible(frustum, ev.x, ev.y, ev.z)) continue;
-            WaypointsModule.drawBeacon(matrices, immediate, camera, cam, mc.textRenderer, ev.x, ev.y, ev.z, ev.label, 0xFF000000 | ev.type.colorRgb);
+            WaypointsModule.drawBeacon(matrices, immediate, camera, cam, mc.font, ev.x, ev.y, ev.z, ev.label, 0xFF000000 | ev.type.colorRgb);
             drewAny = true;
         }
         for (ActiveEvent ev : this.colisEvents.values()) {
-            if (!WaypointsModule.isBeaconVisible(frustum, ev.x, ev.y, ev.z)) continue;
-            WaypointsModule.drawBeacon(matrices, immediate, camera, cam, mc.textRenderer, ev.x, ev.y, ev.z, ev.label, 0xFF000000 | ev.type.colorRgb);
+            WaypointsModule.drawBeacon(matrices, immediate, camera, cam, mc.font, ev.x, ev.y, ev.z, ev.label, 0xFF000000 | ev.type.colorRgb);
             drewAny = true;
         }
         if (failleActive) {
             drewAny |= MiniEventsModule.renderTemporalZombies(mc, matrices, immediate, cam);
         }
-        matrices.pop();
+        matrices.popPose();
         if (!drewAny) {
             return;
         }
-        RenderSystem.disableDepthTest();
-        RenderSystem.lineWidth((float)4.0f);
-        immediate.draw();
-        RenderSystem.lineWidth((float)1.0f);
-        RenderSystem.enableDepthTest();
+        immediate.endBatch();
     }
 
-    private static boolean renderTemporalZombies(MinecraftClient mc, MatrixStack matrices, VertexConsumerProvider.Immediate immediate, Vec3d cam) {
-        if (mc.player == null || mc.world == null) {
+    private static boolean renderTemporalZombies(Minecraft mc, PoseStack matrices, MultiBufferSource.BufferSource immediate, Vec3 cam) {
+        if (mc.player == null || mc.level == null) {
             return false;
         }
         int color = 0xFF000000 | MiniEventType.FAILLE.colorRgb;
         boolean drew = false;
-        List<LivingEntity> mobs = mc.world.getEntitiesByClass(LivingEntity.class, mc.player.getBoundingBox().expand(96.0), e -> !e.isRemoved() && !(e instanceof PlayerEntity));
+        List<LivingEntity> mobs = mc.level.getEntitiesOfClass(LivingEntity.class, mc.player.getBoundingBox().inflate(96.0), e -> !e.isRemoved() && !(e instanceof Player));
         for (LivingEntity mob : mobs) {
             String ascii;
             String name = MiniEventsModule.entityName(mob);
             if (name == null || !(ascii = MiniEventsModule.stripDiacritics(name).toLowerCase(Locale.ROOT)).contains("zombie temporel")) continue;
-            Box box = mob.getBoundingBox();
+            AABB box = mob.getBoundingBox();
             MiniEventsModule.drawBoxOutline(matrices, immediate, cam, box.minX, box.minY, box.minZ, box.maxX, box.maxY, box.maxZ, color);
             drew = true;
         }
         return drew;
     }
 
-    private static void drawBoxOutline(MatrixStack matrices, VertexConsumerProvider.Immediate immediate, Vec3d cam, double wxMin, double wyMin, double wzMin, double wxMax, double wyMax, double wzMax, int color) {
+    private static void drawBoxOutline(PoseStack matrices, MultiBufferSource.BufferSource immediate, Vec3 cam, double wxMin, double wyMin, double wzMin, double wxMax, double wyMax, double wzMax, int color) {
         float r = (float)(color >> 16 & 0xFF) / 255.0f;
         float g = (float)(color >> 8 & 0xFF) / 255.0f;
         float b = (float)(color & 0xFF) / 255.0f;
@@ -1059,9 +1077,9 @@ implements Module {
         MiniEventsModule.drawBoxLines(immediate, matrices, WaypointsModule.BEACON_LINES_FRONT, xMin, yMin, zMin, xMax, yMax, zMax, r, g, b, 0.95f);
     }
 
-    private static void drawBoxLines(VertexConsumerProvider.Immediate immediate, MatrixStack matrices, RenderLayer layer, float xMin, float yMin, float zMin, float xMax, float yMax, float zMax, float r, float g, float b, float a) {
+    private static void drawBoxLines(MultiBufferSource.BufferSource immediate, PoseStack matrices, RenderType layer, float xMin, float yMin, float zMin, float xMax, float yMax, float zMax, float r, float g, float b, float a) {
         VertexConsumer lines = immediate.getBuffer(layer);
-        MatrixStack.Entry entry = matrices.peek();
+        PoseStack.Pose entry = matrices.last();
         MiniEventsModule.edge(lines, entry, xMin, yMin, zMin, xMax, yMin, zMin, r, g, b, a);
         MiniEventsModule.edge(lines, entry, xMax, yMin, zMin, xMax, yMin, zMax, r, g, b, a);
         MiniEventsModule.edge(lines, entry, xMax, yMin, zMax, xMin, yMin, zMax, r, g, b, a);
@@ -1076,21 +1094,21 @@ implements Module {
         MiniEventsModule.edge(lines, entry, xMin, yMin, zMax, xMin, yMax, zMax, r, g, b, a);
     }
 
-    private static void edge(VertexConsumer lines, MatrixStack.Entry entry, float x1, float y1, float z1, float x2, float y2, float z2, float r, float g, float b, float a) {
-        lines.vertex(entry, x1, y1, z1).color(r, g, b, a).normal(entry, 0.0f, 1.0f, 0.0f);
-        lines.vertex(entry, x2, y2, z2).color(r, g, b, a).normal(entry, 0.0f, 1.0f, 0.0f);
+    private static void edge(VertexConsumer lines, PoseStack.Pose entry, float x1, float y1, float z1, float x2, float y2, float z2, float r, float g, float b, float a) {
+        lines.addVertex(entry, x1, y1, z1).setColor(r, g, b, a).setNormal(entry, 0.0f, 1.0f, 0.0f).setLineWidth(4.0f);
+        lines.addVertex(entry, x2, y2, z2).setColor(r, g, b, a).setNormal(entry, 0.0f, 1.0f, 0.0f).setLineWidth(4.0f);
     }
 
     @Override
-    public void onHudRender(DrawContext ctx, float tickDelta) {
-        MinecraftClient client = MinecraftClient.getInstance();
-        if (client.player == null || client.currentScreen != null) {
+    public void onHudRender(GuiGraphicsExtractor ctx, float tickDelta) {
+        Minecraft client = Minecraft.getInstance();
+        if (client.player == null || client.screen != null) {
             return;
         }
         if (!ZombieZDetector.isOnZombieZ()) {
             return;
         }
-        if (!client.options.hudHidden) {
+        if (!client.options.hideGui) {
             if (this.config().marchandTimer) {
                 this.renderSpawnTimer(ctx, client, false, "marchand_timer", "zombiezcompanion.mini_events.marchand.timer", 0.3);
             }
@@ -1122,7 +1140,7 @@ implements Module {
         }
     }
 
-    private void renderToasts(DrawContext ctx, MinecraftClient client) {
+    private void renderToasts(GuiGraphicsExtractor ctx, Minecraft client) {
         if (this.toasts.isEmpty()) {
             return;
         }
@@ -1131,8 +1149,8 @@ implements Module {
         if (this.toasts.isEmpty()) {
             return;
         }
-        int screenW = client.getWindow().getScaledWidth();
-        int screenH = client.getWindow().getScaledHeight();
+        int screenW = client.getWindow().getGuiScaledWidth();
+        int screenH = client.getWindow().getGuiScaledHeight();
         int boxW = 220;
         int boxH = 32;
         int gap = 6;
@@ -1144,10 +1162,10 @@ implements Module {
         int originX = HudAnchor.resolveX(hud, "mini_events_toast", screenW, scaledW, 0.5);
         int startY = HudAnchor.resolveY(hud, "mini_events_toast", screenH, scaledTotalH, 0.08);
         HudElements.report("mini_events_toast", originX, startY, scaledW, scaledTotalH);
-        ctx.getMatrices().push();
-        ctx.getMatrices().translate((float)originX, (float)startY, 0.0f);
+        ctx.pose().pushMatrix();
+        ctx.pose().translate((float)originX, (float)startY);
         if (scale != 1.0) {
-            ctx.getMatrices().scale((float)scale, (float)scale, 1.0f);
+            ctx.pose().scale((float)scale, (float)scale);
         }
         int i = 0;
         for (Toast t2 : this.toasts) {
@@ -1166,16 +1184,16 @@ implements Module {
             int textCol = a << 24 | 0xFFFFFF;
             ctx.fill(x, y, x + boxW, y + boxH, bg);
             ctx.fill(x, y, x + 3, y + boxH, accent);
-            ctx.drawBorder(x, y, boxW, boxH, border);
-            String title = Text.translatable((String)"zombiezcompanion.mini_events.toast.spawn").getString();
+            ctx.outline(x, y, boxW, boxH, border);
+            String title = Component.translatable((String)"zombiezcompanion.mini_events.toast.spawn").getString();
             String label = t2.type.label;
-            int titleW = client.textRenderer.getWidth(title);
-            int labelW = client.textRenderer.getWidth(label);
-            ctx.drawTextWithShadow(client.textRenderer, title, x + (boxW - titleW) / 2, y + 6, (int)(alpha * 200.0f) << 24 | 0xCCCCCC);
-            ctx.drawTextWithShadow(client.textRenderer, label, x + (boxW - labelW) / 2, y + 18, textCol);
+            int titleW = client.font.width(title);
+            int labelW = client.font.width(label);
+            ctx.text(client.font, title, x + (boxW - titleW) / 2, y + 6, (int)(alpha * 200.0f) << 24 | 0xCCCCCC);
+            ctx.text(client.font, label, x + (boxW - labelW) / 2, y + 18, textCol);
             ++i;
         }
-        ctx.getMatrices().pop();
+        ctx.pose().popMatrix();
     }
 
     private void reset() {

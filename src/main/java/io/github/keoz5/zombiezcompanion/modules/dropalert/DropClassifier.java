@@ -9,9 +9,9 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
-import net.minecraft.item.ItemStack;
-import net.minecraft.text.Text;
-import net.minecraft.text.TextColor;
+import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.TextColor;
+import net.minecraft.world.item.ItemStack;
 
 public final class DropClassifier {
     private static final Map<String, DropRarity> FOOD_DROPS = new HashMap<String, DropRarity>();
@@ -61,16 +61,16 @@ public final class DropClassifier {
     }
 
     public static DropRarity rarityOf(ItemStack stack) {
-        Integer rgb = DropClassifier.firstColor(stack.getName());
+        Integer rgb = DropClassifier.firstColor(stack.getHoverName());
         return rgb == null ? DropRarity.COMMON : DropClassifier.nearestRarity(rgb);
     }
 
-    private static Integer firstColor(Text text) {
+    private static Integer firstColor(Component text) {
         TextColor color = text.getStyle().getColor();
         if (color != null) {
-            return color.getRgb();
+            return color.getValue();
         }
-        for (Text sibling : text.getSiblings()) {
+        for (Component sibling : text.getSiblings()) {
             Integer c = DropClassifier.firstColor(sibling);
             if (c == null) continue;
             return c;

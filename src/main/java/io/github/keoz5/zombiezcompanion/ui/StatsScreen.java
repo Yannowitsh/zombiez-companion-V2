@@ -10,11 +10,10 @@ import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.List;
 import java.util.Locale;
-import net.minecraft.text.Text;
-import net.minecraft.client.gui.DrawContext;
-import net.minecraft.client.gui.Element;
-import net.minecraft.client.gui.screen.Screen;
-import net.minecraft.text.StringVisitable;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.FormattedText;
 
 public final class StatsScreen
 extends Screen {
@@ -27,7 +26,7 @@ extends Screen {
     private Tab activeTab = Tab.ITEMS;
 
     public StatsScreen(Screen parent, ConfigManager configManager) {
-        super((Text)Text.translatable((String)"zombiezcompanion.stats.title"));
+        super((Component)Component.translatable((String)"zombiezcompanion.stats.title"));
         this.parent = parent;
         this.configManager = configManager;
     }
@@ -40,7 +39,7 @@ extends Screen {
         this.panelH = Math.max(this.panelH, 360);
         this.panelX = (this.width - this.panelW) / 2;
         this.panelY = (this.height - this.panelH) / 2;
-        this.addDrawableChild(new StyledButton(this.panelX + this.panelW - 36, this.panelY + 8, 22, 22, (Text)Text.literal((String)"X"), btn -> this.close(), -266723542, -265932737, -854792));
+        this.addRenderableWidget(new StyledButton(this.panelX + this.panelW - 36, this.panelY + 8, 22, 22, (Component)Component.literal((String)"X"), btn -> this.onClose(), -266723542, -265932737, -854792));
         int tabsY = this.panelY + 36;
         int tabH = 22;
         int tabsX = this.panelX + 16;
@@ -50,12 +49,12 @@ extends Screen {
         this.addTabButton(tabsX + (tabW + gap), tabsY, tabW, tabH, "zombiezcompanion.stats.tab.xp", Tab.XP);
         this.addTabButton(tabsX + 2 * (tabW + gap), tabsY, tabW, tabH, "zombiezcompanion.stats.tab.combat", Tab.COMBAT);
         this.addTabButton(tabsX + 3 * (tabW + gap), tabsY, tabW, tabH, "zombiezcompanion.stats.tab.economy", Tab.ECONOMY);
-        this.addDrawableChild(new StyledButton(this.panelX + this.panelW - 124, this.panelY + this.panelH - 32, 108, 20, (Text)Text.translatable((String)"zombiezcompanion.button.close"), btn -> this.close(), -266723542, -265932737, -854792));
-        this.addDrawableChild(new StyledButton(this.panelX + 16, this.panelY + this.panelH - 32, 110, 20, (Text)Text.translatable((String)"zombiezcompanion.stats.reset"), btn -> this.resetActiveTab(), -12965328, -11716288, -854792));
+        this.addRenderableWidget(new StyledButton(this.panelX + this.panelW - 124, this.panelY + this.panelH - 32, 108, 20, (Component)Component.translatable((String)"zombiezcompanion.button.close"), btn -> this.onClose(), -266723542, -265932737, -854792));
+        this.addRenderableWidget(new StyledButton(this.panelX + 16, this.panelY + this.panelH - 32, 110, 20, (Component)Component.translatable((String)"zombiezcompanion.stats.reset"), btn -> this.resetActiveTab(), -12965328, -11716288, -854792));
     }
 
     private void addTabButton(int x, int y, int w, int h, String key, Tab tab) {
-        this.addDrawableChild(new CategoryTabButton(x, y, w, h, (Text)Text.translatable((String)key), btn -> {
+        this.addRenderableWidget(new CategoryTabButton(x, y, w, h, (Component)Component.translatable((String)key), btn -> {
             this.activeTab = tab;
         }, () -> this.activeTab == tab));
     }
@@ -90,13 +89,13 @@ extends Screen {
         }
     }
 
-    public void render(DrawContext ctx, int mouseX, int mouseY, float delta) {
+    public void extractRenderState(GuiGraphicsExtractor ctx, int mouseX, int mouseY, float delta) {
         ctx.fill(0, 0, this.width, this.height, -872415232);
         ctx.fill(this.panelX + 2, this.panelY + 4, this.panelX + this.panelW + 2, this.panelY + this.panelH + 4, -1442840576);
         ctx.fill(this.panelX, this.panelY, this.panelX + this.panelW, this.panelY + this.panelH, -183627755);
         ctx.fill(this.panelX, this.panelY, this.panelX + this.panelW, this.panelY + 2, -8874241);
-        ctx.drawBorder(this.panelX, this.panelY, this.panelW, this.panelH, -13880766);
-        ctx.drawTextWithShadow(this.textRenderer, (Text)Text.translatable((String)"zombiezcompanion.stats.title"), this.panelX + 16, this.panelY + 14, -854792);
+        ctx.outline(this.panelX, this.panelY, this.panelW, this.panelH, -13880766);
+        ctx.text(this.font, (Component)Component.translatable((String)"zombiezcompanion.stats.title"), this.panelX + 16, this.panelY + 14, -854792);
         int contentTop = this.panelY + 66;
         int contentBottom = this.panelY + this.panelH - 40;
         int cx = this.panelX + 16;
@@ -118,26 +117,26 @@ extends Screen {
                 this.renderEconomyTab(ctx, cx, contentTop, cw, contentBottom);
             }
         }
-        super.render(ctx, mouseX, mouseY, delta);
+        super.extractRenderState(ctx, mouseX, mouseY, delta);
     }
 
-    private void renderItemsTab(DrawContext ctx, int x, int top, int w, int bottom) {
+    private void renderItemsTab(GuiGraphicsExtractor ctx, int x, int top, int w, int bottom) {
         StatsConfig stats = this.configManager.get().stats;
-        ctx.drawTextWithShadow(this.textRenderer, (Text)Text.translatable((String)"zombiezcompanion.stats.total", (Object[])new Object[]{stats.totalDrops}), x, top, -8874241);
+        ctx.text(this.font, (Component)Component.translatable((String)"zombiezcompanion.stats.total", (Object[])new Object[]{stats.totalDrops}), x, top, -8874241);
         if (stats.recycledItems > 0L) {
-            String rec = Text.translatable((String)"zombiezcompanion.stats.recycled", (Object[])new Object[]{stats.recycledItems}).getString();
-            ctx.drawTextWithShadow(this.textRenderer, rec, x + w - this.textRenderer.getWidth(rec), top, -8353376);
+            String rec = Component.translatable((String)"zombiezcompanion.stats.recycled", (Object[])new Object[]{stats.recycledItems}).getString();
+            ctx.text(this.font, rec, x + w - this.font.width(rec), top, -8353376);
         }
         int rowsTop = top + 18;
         if (stats.firstSeen > 0L) {
             String date = new SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.ROOT).format(new Date(stats.firstSeen));
-            ctx.drawTextWithShadow(this.textRenderer, (Text)Text.translatable((String)"zombiezcompanion.stats.since", (Object[])new Object[]{date}), x, top + 12, -8353376);
+            ctx.text(this.font, (Component)Component.translatable((String)"zombiezcompanion.stats.since", (Object[])new Object[]{date}), x, top + 12, -8353376);
             String elapsed = StatsScreen.formatElapsed(System.currentTimeMillis() - stats.firstSeen);
             double rate = (double)stats.totalDrops / Math.max(1.0, (double)(System.currentTimeMillis() - stats.firstSeen) / 3600000.0);
             String rateStr = String.format(Locale.ROOT, "%.1f", rate);
-            String elapsedLine = Text.translatable((String)"zombiezcompanion.stats.elapsed", (Object[])new Object[]{elapsed, rateStr}).getString();
-            int ew = this.textRenderer.getWidth(elapsedLine);
-            ctx.drawTextWithShadow(this.textRenderer, elapsedLine, x + w - ew, top + 12, -8353376);
+            String elapsedLine = Component.translatable((String)"zombiezcompanion.stats.elapsed", (Object[])new Object[]{elapsed, rateStr}).getString();
+            int ew = this.font.width(elapsedLine);
+            ctx.text(this.font, elapsedLine, x + w - ew, top + 12, -8353376);
             rowsTop = top + 30;
         }
         int available = bottom - rowsTop;
@@ -158,41 +157,41 @@ extends Screen {
             ctx.fill(x, y, x + 4, y + rowH, color);
             ctx.fill(x, y, x + w, y + 1, 0x22FFFFFF);
             int textY = y + (rowH - 8) / 2;
-            ctx.drawTextWithShadow(this.textRenderer, (Text)Text.translatable((String)("zombiezcompanion.drop_alert.rarity." + rarity.key)), x + 12, textY, color);
+            ctx.text(this.font, (Component)Component.translatable((String)("zombiezcompanion.drop_alert.rarity." + rarity.key)), x + 12, textY, color);
             String rateStr = String.format(Locale.ROOT, "%.1f/h", (double)count / hours);
-            int rw = this.textRenderer.getWidth(rateStr);
-            ctx.drawTextWithShadow(this.textRenderer, rateStr, x + w - rw - 12, textY, -8353376);
+            int rw = this.font.width(rateStr);
+            ctx.text(this.font, rateStr, x + w - rw - 12, textY, -8353376);
             String countStr = String.valueOf(count);
-            int cw = this.textRenderer.getWidth(countStr);
-            ctx.drawTextWithShadow(this.textRenderer, countStr, x + w - rw - cw - 24, textY, -854792);
+            int cw = this.font.width(countStr);
+            ctx.text(this.font, countStr, x + w - rw - cw - 24, textY, -854792);
             y += rowH + gap;
         }
     }
 
-    private void renderXpTab(DrawContext ctx, int x, int top, int w, int bottom) {
+    private void renderXpTab(GuiGraphicsExtractor ctx, int x, int top, int w, int bottom) {
         StatsModule tracker = StatsModule.get();
         if (tracker == null) {
-            ctx.drawTextWithShadow(this.textRenderer, (Text)Text.translatable((String)"zombiezcompanion.stats.xp.no_data"), x, top + 8, -8353376);
+            ctx.text(this.font, (Component)Component.translatable((String)"zombiezcompanion.stats.xp.no_data"), x, top + 8, -8353376);
             return;
         }
         int rowH = 44;
-        this.renderXpRow(ctx, x, top, w, rowH, (Text)Text.translatable((String)"zombiezcompanion.stats.xp.profil"), tracker.profil(), -10496);
-        this.renderXpRow(ctx, x, top + rowH + 8, w, rowH, (Text)Text.translatable((String)"zombiezcompanion.stats.xp.rodeur"), tracker.rodeur(), -8874241);
+        this.renderXpRow(ctx, x, top, w, rowH, (Component)Component.translatable((String)"zombiezcompanion.stats.xp.profil"), tracker.profil(), -10496);
+        this.renderXpRow(ctx, x, top + rowH + 8, w, rowH, (Component)Component.translatable((String)"zombiezcompanion.stats.xp.rodeur"), tracker.rodeur(), -8874241);
         int sparkY = top + 2 * (rowH + 8) + 4;
         int sparkH = Math.max(40, bottom - sparkY);
         if (sparkH >= 40) {
             ctx.fill(x + 2, sparkY + 3, x + w + 2, sparkY + sparkH + 3, -1442840576);
             ctx.fill(x, sparkY, x + w, sparkY + sparkH, -267053025);
             ctx.fill(x, sparkY, x + w, sparkY + 1, 0x22FFFFFF);
-            ctx.drawBorder(x, sparkY, w, sparkH, -14736594);
-            ctx.drawTextWithShadow(this.textRenderer, (Text)Text.translatable((String)"zombiezcompanion.stats.xp.graph"), x + 10, sparkY + 6, -8353376);
+            ctx.outline(x, sparkY, w, sparkH, -14736594);
+            ctx.text(this.font, (Component)Component.translatable((String)"zombiezcompanion.stats.xp.graph"), x + 10, sparkY + 6, -8353376);
             this.drawXpSparkline(ctx, x + 10, sparkY + 20, w - 20, sparkH - 28, tracker.profil().samplesSnapshot());
         }
     }
 
-    private void drawXpSparkline(DrawContext ctx, int x, int y, int w, int h, List<StatsModule.LevelSample> samples) {
+    private void drawXpSparkline(GuiGraphicsExtractor ctx, int x, int y, int w, int h, List<StatsModule.LevelSample> samples) {
         if (samples == null || samples.size() < 2) {
-            ctx.drawTextWithShadow(this.textRenderer, (Text)Text.translatable((String)"zombiezcompanion.stats.xp.graph_wait"), x, y + h / 2 - 4, -12235684);
+            ctx.text(this.font, (Component)Component.translatable((String)"zombiezcompanion.stats.xp.graph_wait"), x, y + h / 2 - 4, -12235684);
             return;
         }
         long minTs = samples.get(0).timestamp();
@@ -224,12 +223,12 @@ extends Screen {
         ctx.fill(prevX - 1, prevY - 1, prevX + 2, prevY + 2, -10496);
     }
 
-    private void renderCombatTab(DrawContext ctx, int x, int top, int w, int bottom) {
+    private void renderCombatTab(GuiGraphicsExtractor ctx, int x, int top, int w, int bottom) {
         StatsModule.CombatStats c;
         StatsModule m = StatsModule.get();
         StatsModule.CombatStats combatStats = c = m != null ? m.combat() : null;
         if (c == null || !c.hasData()) {
-            ctx.drawTextWithShadow(this.textRenderer, (Text)Text.translatable((String)"zombiezcompanion.stats.combat.no_data"), x, top + 8, -8353376);
+            ctx.text(this.font, (Component)Component.translatable((String)"zombiezcompanion.stats.combat.no_data"), x, top + 8, -8353376);
             return;
         }
         int y = top;
@@ -241,12 +240,12 @@ extends Screen {
         this.statLine(ctx, x, y, w, "zombiezcompanion.stats.combat.streak_record", String.valueOf(c.streakRecord()), -680437);
     }
 
-    private void renderEconomyTab(DrawContext ctx, int x, int top, int w, int bottom) {
+    private void renderEconomyTab(GuiGraphicsExtractor ctx, int x, int top, int w, int bottom) {
         StatsModule.EconomyStats e;
         StatsModule m = StatsModule.get();
         StatsModule.EconomyStats economyStats = e = m != null ? m.economy() : null;
         if (e == null || !e.hasData()) {
-            ctx.drawTextWithShadow(this.textRenderer, (Text)Text.translatable((String)"zombiezcompanion.stats.economy.no_data"), x, top + 8, -8353376);
+            ctx.text(this.font, (Component)Component.translatable((String)"zombiezcompanion.stats.economy.no_data"), x, top + 8, -8353376);
             return;
         }
         int y = top;
@@ -259,15 +258,15 @@ extends Screen {
         this.statLine(ctx, x, y, w, "zombiezcompanion.stats.economy.fragments", String.valueOf(e.fragments()), -13248513);
     }
 
-    private int statLine(DrawContext ctx, int x, int y, int w, String labelKey, String value, int accent) {
+    private int statLine(GuiGraphicsExtractor ctx, int x, int y, int w, String labelKey, String value, int accent) {
         int h = 26;
         ctx.fill(x + 2, y + 3, x + w + 2, y + h + 3, -1442840576);
         ctx.fill(x, y, x + w, y + h, -267053025);
         ctx.fill(x, y, x + 4, y + h, accent);
         ctx.fill(x, y, x + w, y + 1, 0x22FFFFFF);
-        ctx.drawTextWithShadow(this.textRenderer, (Text)Text.translatable((String)labelKey), x + 12, y + 9, -8353376);
-        int vw = this.textRenderer.getWidth(value);
-        ctx.drawTextWithShadow(this.textRenderer, (Text)Text.literal((String)value), x + w - vw - 12, y + 9, -854792);
+        ctx.text(this.font, (Component)Component.translatable((String)labelKey), x + 12, y + 9, -8353376);
+        int vw = this.font.width(value);
+        ctx.text(this.font, (Component)Component.literal((String)value), x + w - vw - 12, y + 9, -854792);
         return y + h + 6;
     }
 
@@ -282,7 +281,7 @@ extends Screen {
         return String.format(Locale.ROOT, "%.0f", v);
     }
 
-    private void renderXpRow(DrawContext ctx, int x, int y, int w, int h, Text label, StatsModule.LevelHistory hist, int accent) {
+    private void renderXpRow(GuiGraphicsExtractor ctx, int x, int y, int w, int h, Component label, StatsModule.LevelHistory hist, int accent) {
         String deltaStr;
         String etaStr;
         String rateStr;
@@ -291,10 +290,10 @@ extends Screen {
         ctx.fill(x, y, x + w, y + h, -267053025);
         ctx.fill(x, y, x + 4, y + h, accent);
         ctx.fill(x, y, x + w, y + 1, 0x22FFFFFF);
-        ctx.drawBorder(x, y, w, h, -14736594);
+        ctx.outline(x, y, w, h, -14736594);
         StatsModule.LevelSample s = hist.latest();
         if (s == null) {
-            levelStr = Text.translatable((String)"zombiezcompanion.stats.xp.waiting").getString();
+            levelStr = Component.translatable((String)"zombiezcompanion.stats.xp.waiting").getString();
             rateStr = "\u2014";
             etaStr = "\u2014";
             deltaStr = "\u2014";
@@ -308,21 +307,21 @@ extends Screen {
             long dur = hist.sessionDurationMs();
             deltaStr = dur > 0L ? String.format(Locale.ROOT, "+%.2f / %s", dLvl, StatsScreen.formatElapsed(dur)) : "\u2014";
         }
-        ctx.drawTextWithShadow(this.textRenderer, label, x + 12, y + 6, accent);
-        ctx.drawTextWithShadow(this.textRenderer, (Text)Text.literal((String)levelStr), x + 12, y + 24, -854792);
+        ctx.text(this.font, label, x + 12, y + 6, accent);
+        ctx.text(this.font, (Component)Component.literal((String)levelStr), x + 12, y + 24, -854792);
         int rightX = x + w - 12;
         int statsSpan = (int)((double)(w - 24) * 0.58);
         int statW = statsSpan / 3;
-        this.drawStat(ctx, rightX - 2 * statW, (Text)Text.translatable((String)"zombiezcompanion.stats.xp.rate"), rateStr, y);
-        this.drawStat(ctx, rightX - statW, (Text)Text.translatable((String)"zombiezcompanion.stats.xp.eta"), etaStr, y);
-        this.drawStat(ctx, rightX, (Text)Text.translatable((String)"zombiezcompanion.stats.xp.session"), deltaStr, y);
+        this.drawStat(ctx, rightX - 2 * statW, (Component)Component.translatable((String)"zombiezcompanion.stats.xp.rate"), rateStr, y);
+        this.drawStat(ctx, rightX - statW, (Component)Component.translatable((String)"zombiezcompanion.stats.xp.eta"), etaStr, y);
+        this.drawStat(ctx, rightX, (Component)Component.translatable((String)"zombiezcompanion.stats.xp.session"), deltaStr, y);
     }
 
-    private void drawStat(DrawContext ctx, int rightX, Text label, String value, int y) {
-        int lw = this.textRenderer.getWidth((StringVisitable)label);
-        int vw = this.textRenderer.getWidth(value);
-        ctx.drawText(this.textRenderer, label, rightX - lw, y + 6, -8353376, false);
-        ctx.drawTextWithShadow(this.textRenderer, (Text)Text.literal((String)value), rightX - vw, y + 24, -854792);
+    private void drawStat(GuiGraphicsExtractor ctx, int rightX, Component label, String value, int y) {
+        int lw = this.font.width((FormattedText)label);
+        int vw = this.font.width(value);
+        ctx.text(this.font, label, rightX - lw, y + 6, -8353376, false);
+        ctx.text(this.font, (Component)Component.literal((String)value), rightX - vw, y + 24, -854792);
     }
 
     private static String formatElapsed(long ms) {
@@ -338,25 +337,26 @@ extends Screen {
         return s + "s";
     }
 
-    public void renderBackground(DrawContext ctx, int mouseX, int mouseY, float delta) {
+    public void extractBackground(GuiGraphicsExtractor ctx, int mouseX, int mouseY, float delta) {
     }
 
-    public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
+    public boolean keyPressed(net.minecraft.client.input.KeyEvent event) {
+        int keyCode = event.key(), scanCode = event.scancode(), modifiers = event.modifiers();
         if (keyCode == 256) {
-            this.close();
+            this.onClose();
             return true;
         }
-        return super.keyPressed(keyCode, scanCode, modifiers);
+        return super.keyPressed(event);
     }
 
-    public void close() {
+    public void onClose() {
         this.configManager.save();
-        if (this.client != null) {
-            this.client.setScreen(this.parent);
+        if (this.minecraft != null) {
+            this.minecraft.setScreen(this.parent);
         }
     }
 
-    public boolean shouldPause() {
+    public boolean isPauseScreen() {
         return false;
     }
 

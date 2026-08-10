@@ -1,7 +1,7 @@
 package io.github.keoz5.zombiezcompanion.modules.map;
 
 import java.awt.Color;
-import net.minecraft.util.Identifier;
+import net.minecraft.resources.Identifier;
 
 public final class ZombieZMapData {
     /** Dimension id of the primary map (zones 1-50). */
@@ -59,7 +59,7 @@ public final class ZombieZMapData {
         int ty = -4 * cy;
         int sx = tx >> 5;
         int sy = ty >> 5;
-        return Identifier.of((String)"zombiezcompanion", (String)("map/tiles/world/flat/" + sx + "_" + sy + "/zz_" + tx + "_" + ty + ".png"));
+        return Identifier.fromNamespaceAndPath((String)"zombiezcompanion", (String)("map/tiles/world/flat/" + sx + "_" + sy + "/zz_" + tx + "_" + ty + ".png"));
     }
 
     public static int zoneColor(int zone) {

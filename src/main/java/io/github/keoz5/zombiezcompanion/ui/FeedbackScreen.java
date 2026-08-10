@@ -1,5 +1,6 @@
 package io.github.keoz5.zombiezcompanion.ui;
 
+import io.github.keoz5.zombiezcompanion.ModInfo;
 import io.github.keoz5.zombiezcompanion.config.ConfigManager;
 import io.github.keoz5.zombiezcompanion.net.HttpClients;
 import io.github.keoz5.zombiezcompanion.ui.widget.StyledButton;
@@ -10,16 +11,15 @@ import java.time.Duration;
 import java.util.Locale;
 import java.util.concurrent.CompletableFuture;
 import net.fabricmc.loader.api.FabricLoader;
-import net.minecraft.text.Text;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.gui.DrawContext;
-import net.minecraft.client.gui.Element;
-import net.minecraft.client.gui.screen.Screen;
-import net.minecraft.client.gui.widget.EditBoxWidget;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.components.MultiLineEditBox;
+import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.network.chat.Component;
 
 public final class FeedbackScreen
 extends Screen {
-    private static final String ENDPOINT = "https://zombiez-companion-api.keoz5.workers.dev/feedback";
+    private static final String ENDPOINT = ModInfo.API_BASE + "/feedback";
     private static final int MAX_LEN = 1500;
     private final Screen parent;
     private final ConfigManager configManager;
@@ -33,7 +33,7 @@ extends Screen {
     private int contentY2;
     private int footerY1;
     private int footerY2;
-    private EditBoxWidget editor;
+    private MultiLineEditBox editor;
     private StyledButton sendBtn;
     private String category = "suggestion";
     private String statusText = "";
@@ -41,7 +41,7 @@ extends Screen {
     private boolean sending;
 
     public FeedbackScreen(Screen parent, ConfigManager configManager) {
-        super((Text)Text.translatable((String)"zombiezcompanion.feedback.title"));
+        super((Component)Component.translatable((String)"zombiezcompanion.feedback.title"));
         this.parent = parent;
         this.configManager = configManager;
     }
@@ -60,29 +60,29 @@ extends Screen {
         this.footerY1 = this.footerY2 - 34;
         this.contentY1 = this.titleY2;
         this.contentY2 = this.footerY1;
-        this.addDrawableChild(new StyledButton(this.panelX2 - 12 - 22, this.titleY1 + 10, 22, 22, (Text)Text.literal((String)"X"), b -> this.close(), -266723542, -265932737, -854792));
+        this.addRenderableWidget(new StyledButton(this.panelX2 - 12 - 22, this.titleY1 + 10, 22, 22, (Component)Component.literal((String)"X"), b -> this.onClose(), -266723542, -265932737, -854792));
         int catY = this.contentY1 + 28;
         int catW = 120;
         int catGap = 8;
         int catX = this.panelX1 + 36;
-        this.addCategory(catX, catY, catW, "bug", (Text)Text.translatable((String)"zombiezcompanion.feedback.cat.bug"));
-        this.addCategory(catX + catW + catGap, catY, catW, "suggestion", (Text)Text.translatable((String)"zombiezcompanion.feedback.cat.suggestion"));
-        this.addCategory(catX + 2 * (catW + catGap), catY, catW, "autre", (Text)Text.translatable((String)"zombiezcompanion.feedback.cat.other"));
+        this.addCategory(catX, catY, catW, "bug", (Component)Component.translatable((String)"zombiezcompanion.feedback.cat.bug"));
+        this.addCategory(catX + catW + catGap, catY, catW, "suggestion", (Component)Component.translatable((String)"zombiezcompanion.feedback.cat.suggestion"));
+        this.addCategory(catX + 2 * (catW + catGap), catY, catW, "autre", (Component)Component.translatable((String)"zombiezcompanion.feedback.cat.other"));
         int editorY = catY + 32;
         int editorW = this.panelX2 - this.panelX1 - 72;
         int editorH = this.contentY2 - editorY - 24;
-        this.editor = new EditBoxWidget(this.textRenderer, this.panelX1 + 36, editorY, editorW, editorH, (Text)Text.translatable((String)"zombiezcompanion.feedback.placeholder"), (Text)Text.translatable((String)"zombiezcompanion.feedback.placeholder"));
-        this.editor.setMaxLength(1500);
-        this.addDrawableChild(this.editor);
+        this.editor = new MultiLineEditBox.Builder().setX(this.panelX1 + 36).setY(editorY).setPlaceholder((Component)Component.translatable((String)"zombiezcompanion.feedback.placeholder")).build(this.font, editorW, editorH, (Component)Component.translatable((String)"zombiezcompanion.feedback.placeholder"));
+        this.editor.setCharacterLimit(1500);
+        this.addRenderableWidget(this.editor);
         int btnH = 20;
         int btnY = this.footerY1 + (34 - btnH) / 2;
-        this.addDrawableChild(new StyledButton(this.panelX1 + 12, btnY, 100, btnH, (Text)Text.translatable((String)"zombiezcompanion.button.back"), b -> this.close(), -266723542, -265932737, -854792));
-        this.sendBtn = new StyledButton(this.panelX2 - 12 - 120, btnY, 120, btnH, (Text)Text.translatable((String)"zombiezcompanion.feedback.send"), b -> this.send(), -11441921, -8874241, -854792);
-        this.addDrawableChild(this.sendBtn);
+        this.addRenderableWidget(new StyledButton(this.panelX1 + 12, btnY, 100, btnH, (Component)Component.translatable((String)"zombiezcompanion.button.back"), b -> this.onClose(), -266723542, -265932737, -854792));
+        this.sendBtn = new StyledButton(this.panelX2 - 12 - 120, btnY, 120, btnH, (Component)Component.translatable((String)"zombiezcompanion.feedback.send"), b -> this.send(), -11441921, -8874241, -854792);
+        this.addRenderableWidget(this.sendBtn);
     }
 
-    private void addCategory(int x, int y, int w, String key, Text label) {
-        this.addDrawableChild(new StyledButton(x, y, w, 22, this.catLabel(key, label), btn -> {
+    private void addCategory(int x, int y, int w, String key, Component label) {
+        this.addRenderableWidget(new StyledButton(x, y, w, 22, this.catLabel(key, label), btn -> {
             this.category = key;
             this.rebuild();
         }, this.isActive(key) ? -11441921 : -266723542, this.isActive(key) ? -8874241 : -265932737, -854792));
@@ -92,12 +92,12 @@ extends Screen {
         return key.equals(this.category);
     }
 
-    private Text catLabel(String key, Text base) {
+    private Component catLabel(String key, Component base) {
         return base;
     }
 
     private void rebuild() {
-        this.clearChildren();
+        this.clearWidgets();
         this.init();
     }
 
@@ -108,22 +108,22 @@ extends Screen {
         if (this.editor == null) {
             return;
         }
-        String msg = this.editor.getText().trim();
+        String msg = this.editor.getValue().trim();
         if (msg.isEmpty()) {
-            this.statusText = Text.translatable((String)"zombiezcompanion.feedback.empty").getString();
+            this.statusText = Component.translatable((String)"zombiezcompanion.feedback.empty").getString();
             this.statusColor = -32640;
             return;
         }
         this.sending = true;
         this.sendBtn.active = false;
-        this.statusText = Text.translatable((String)"zombiezcompanion.feedback.sending").getString();
+        this.statusText = Component.translatable((String)"zombiezcompanion.feedback.sending").getString();
         this.statusColor = -8353376;
         String uuid = this.configManager.get().telemetry.uuid;
-        MinecraftClient mc = MinecraftClient.getInstance();
-        String name = mc.player != null ? mc.player.getGameProfile().getName() : "?";
+        Minecraft mc = Minecraft.getInstance();
+        String name = mc.player != null ? mc.player.getGameProfile().name() : "?";
         String modV = FeedbackScreen.modVersion();
         String mcV = FeedbackScreen.mcVersion();
-        String locale = mc.options != null ? mc.options.language : "fr_fr";
+        String locale = mc.options != null ? mc.options.languageCode : "fr_fr";
         String body = "{\"uuid\":\"" + FeedbackScreen.escape(uuid) + "\",\"name\":\"" + FeedbackScreen.escape(name) + "\",\"category\":\"" + FeedbackScreen.escape(this.category) + "\",\"message\":\"" + FeedbackScreen.escape(msg) + "\",\"mod_version\":\"" + FeedbackScreen.escape(modV) + "\",\"mc_version\":\"" + FeedbackScreen.escape(mcV) + "\",\"locale\":\"" + FeedbackScreen.escape(locale) + "\"}";
         try {
             HttpRequest req = HttpRequest.newBuilder().uri(URI.create(ENDPOINT)).timeout(Duration.ofSeconds(10L)).header("Content-Type", "application/json").POST(HttpRequest.BodyPublishers.ofString(body)).build();
@@ -138,19 +138,19 @@ extends Screen {
     }
 
     private void onResponse(int code, String body) {
-        MinecraftClient.getInstance().execute(() -> {
+        Minecraft.getInstance().execute(() -> {
             this.sending = false;
             if (code == 200) {
-                this.statusText = Text.translatable((String)"zombiezcompanion.feedback.sent").getString();
+                this.statusText = Component.translatable((String)"zombiezcompanion.feedback.sent").getString();
                 this.statusColor = -8323200;
                 if (this.editor != null) {
-                    this.editor.setText("");
+                    this.editor.setValue("");
                 }
             } else if (code == 429) {
-                this.statusText = Text.translatable((String)"zombiezcompanion.feedback.rate_limited").getString();
+                this.statusText = Component.translatable((String)"zombiezcompanion.feedback.rate_limited").getString();
                 this.statusColor = -32640;
             } else {
-                this.statusText = Text.translatable((String)"zombiezcompanion.feedback.error", (Object[])new Object[]{code}).getString();
+                this.statusText = Component.translatable((String)"zombiezcompanion.feedback.error", (Object[])new Object[]{code}).getString();
                 this.statusColor = -32640;
             }
             if (this.sendBtn != null) {
@@ -160,9 +160,9 @@ extends Screen {
     }
 
     private void onError() {
-        MinecraftClient.getInstance().execute(() -> {
+        Minecraft.getInstance().execute(() -> {
             this.sending = false;
-            this.statusText = Text.translatable((String)"zombiezcompanion.feedback.network_error").getString();
+            this.statusText = Component.translatable((String)"zombiezcompanion.feedback.network_error").getString();
             this.statusColor = -32640;
             if (this.sendBtn != null) {
                 this.sendBtn.active = true;
@@ -170,7 +170,7 @@ extends Screen {
         });
     }
 
-    public void render(DrawContext ctx, int mouseX, int mouseY, float delta) {
+    public void extractRenderState(GuiGraphicsExtractor ctx, int mouseX, int mouseY, float delta) {
         ctx.fill(0, 0, this.width, this.height, -872415232);
         ctx.fill(this.panelX1 + 3, this.panelY1 + 6, this.panelX2 + 3, this.panelY2 + 6, -1442840576);
         ctx.fill(this.panelX1, this.panelY1, this.panelX2, this.panelY2, -183627755);
@@ -189,16 +189,16 @@ extends Screen {
         ctx.fill(this.panelX1, this.panelY1 - 1, this.panelX2, this.panelY1, 1148753663);
         ctx.fill(this.panelX1 - 1, this.panelY1, this.panelX1, this.panelY2, 1148753663);
         ctx.fill(this.panelX2, this.panelY1, this.panelX2 + 1, this.panelY2, 1148753663);
-        super.render(ctx, mouseX, mouseY, delta);
-        ctx.drawText(this.textRenderer, (Text)Text.translatable((String)"zombiezcompanion.feedback.title"), this.panelX1 + 18, this.titleY1 + 10, -854792, true);
-        ctx.drawText(this.textRenderer, (Text)Text.translatable((String)"zombiezcompanion.feedback.subtitle"), this.panelX1 + 18, this.titleY1 + 23, -8353376, false);
-        ctx.drawText(this.textRenderer, (Text)Text.translatable((String)"zombiezcompanion.feedback.category"), this.panelX1 + 36, this.contentY1 + 14, -8874241, false);
-        int len = this.editor == null ? 0 : this.editor.getText().length();
+        super.extractRenderState(ctx, mouseX, mouseY, delta);
+        ctx.text(this.font, (Component)Component.translatable((String)"zombiezcompanion.feedback.title"), this.panelX1 + 18, this.titleY1 + 10, -854792, true);
+        ctx.text(this.font, (Component)Component.translatable((String)"zombiezcompanion.feedback.subtitle"), this.panelX1 + 18, this.titleY1 + 23, -8353376, false);
+        ctx.text(this.font, (Component)Component.translatable((String)"zombiezcompanion.feedback.category"), this.panelX1 + 36, this.contentY1 + 14, -8874241, false);
+        int len = this.editor == null ? 0 : this.editor.getValue().length();
         String counter = len + " / 1500";
-        int cw = this.textRenderer.getWidth(counter);
-        ctx.drawText(this.textRenderer, (Text)Text.literal((String)counter), this.panelX2 - 36 - cw, this.contentY2 - 12, len > 1500 ? -32640 : -8353376, false);
+        int cw = this.font.width(counter);
+        ctx.text(this.font, (Component)Component.literal((String)counter), this.panelX2 - 36 - cw, this.contentY2 - 12, len > 1500 ? -32640 : -8353376, false);
         if (!this.statusText.isEmpty()) {
-            ctx.drawText(this.textRenderer, (Text)Text.literal((String)this.statusText), this.panelX1 + 36, this.contentY2 - 12, this.statusColor, false);
+            ctx.text(this.font, (Component)Component.literal((String)this.statusText), this.panelX1 + 36, this.contentY2 - 12, this.statusColor, false);
         }
     }
 
@@ -243,20 +243,20 @@ extends Screen {
     }
 
     private static String modVersion() {
-        return FabricLoader.getInstance().getModContainer("zombiezcompanion").map(c -> c.getMetadata().getVersion().getFriendlyString()).orElse("?");
+        return FabricLoader.getInstance().getModContainer(ModInfo.MOD_ID).map(c -> c.getMetadata().getVersion().getFriendlyString()).orElse("?");
     }
 
     private static String mcVersion() {
         return FabricLoader.getInstance().getModContainer("minecraft").map(c -> c.getMetadata().getVersion().getFriendlyString()).orElse("?");
     }
 
-    public void close() {
-        if (this.client != null) {
-            this.client.setScreen(this.parent);
+    public void onClose() {
+        if (this.minecraft != null) {
+            this.minecraft.setScreen(this.parent);
         }
     }
 
-    public boolean shouldPause() {
+    public boolean isPauseScreen() {
         return false;
     }
 }

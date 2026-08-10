@@ -6,11 +6,11 @@ import io.github.keoz5.zombiezcompanion.modules.skulls.SkullsModule;
 import io.github.keoz5.zombiezcompanion.ui.widget.StyledButton;
 import java.util.ArrayList;
 import java.util.List;
-import net.minecraft.text.Text;
-import net.minecraft.client.gui.DrawContext;
-import net.minecraft.client.gui.Element;
-import net.minecraft.client.gui.widget.ButtonWidget;
-import net.minecraft.client.gui.screen.Screen;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.components.Button;
+import net.minecraft.client.gui.components.events.GuiEventListener;
+import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.network.chat.Component;
 
 public final class SkullsManagerScreen
 extends Screen {
@@ -37,10 +37,10 @@ extends Screen {
     private int zoneScroll = 0;
     private int skullScroll = 0;
     private ZombieZMapData.Zone selectedZone;
-    private final List<ButtonWidget> dynamicWidgets = new ArrayList<ButtonWidget>();
+    private final List<Button> dynamicWidgets = new ArrayList<Button>();
 
     public SkullsManagerScreen(Screen parent, ConfigManager configManager, SkullsModule module) {
-        super((Text)Text.translatable((String)"zombiezcompanion.skulls.title"));
+        super((Component)Component.translatable((String)"zombiezcompanion.skulls.title"));
         this.parent = parent;
         this.configManager = configManager;
         this.module = module;
@@ -69,16 +69,16 @@ extends Screen {
         this.leftW = (int)Math.round((double)innerW * 0.42);
         this.rightX = this.leftX + this.leftW + 12;
         this.rightW = innerW - this.leftW - 12;
-        this.addDrawableChild(new StyledButton(this.panelX2 - 12 - 22, this.titleY1 + 10, 22, 22, (Text)Text.literal((String)"X"), b -> this.close(), -266723542, -265932737, -854792));
+        this.addRenderableWidget(new StyledButton(this.panelX2 - 12 - 22, this.titleY1 + 10, 22, 22, (Component)Component.literal((String)"X"), b -> this.onClose(), -266723542, -265932737, -854792));
         int footBtnH = 20;
         int footBtnY = this.footerY1 + (34 - footBtnH) / 2;
         int fx = this.panelX1 + 12;
-        this.addDrawableChild(new StyledButton(fx, footBtnY, 80, footBtnH, (Text)Text.translatable((String)"zombiezcompanion.button.back"), b -> this.close(), -266723542, -265932737, -854792));
-        this.addDrawableChild(new StyledButton(fx += 86, footBtnY, 150, footBtnH, (Text)Text.translatable((String)"zombiezcompanion.skulls.guide_nearest"), b -> {
+        this.addRenderableWidget(new StyledButton(fx, footBtnY, 80, footBtnH, (Component)Component.translatable((String)"zombiezcompanion.button.back"), b -> this.onClose(), -266723542, -265932737, -854792));
+        this.addRenderableWidget(new StyledButton(fx += 86, footBtnY, 150, footBtnH, (Component)Component.translatable((String)"zombiezcompanion.skulls.guide_nearest"), b -> {
             this.module.guideToNearestUnvisited();
-            this.close();
+            this.onClose();
         }, -11441921, -8874241, -854792));
-        this.addDrawableChild(new StyledButton(fx += 156, footBtnY, 132, footBtnH, (Text)Text.translatable((String)"zombiezcompanion.skulls.remove_all_beacons"), b -> {
+        this.addRenderableWidget(new StyledButton(fx += 156, footBtnY, 132, footBtnH, (Component)Component.translatable((String)"zombiezcompanion.skulls.remove_all_beacons"), b -> {
             this.module.removeAllSkullWaypoints();
             this.rebuildDynamic();
         }, -12965328, -11716288, -854792));
@@ -86,8 +86,8 @@ extends Screen {
     }
 
     private void rebuildDynamic() {
-        for (ButtonWidget w : this.dynamicWidgets) {
-            this.remove((Element)w);
+        for (Button w : this.dynamicWidgets) {
+            this.removeWidget((GuiEventListener)w);
         }
         this.dynamicWidgets.clear();
         int visibleZoneRows = Math.max(1, (this.contentY2 - this.contentY1 - 8) / 24);
@@ -104,9 +104,9 @@ extends Screen {
                 this.skullScroll = 0;
                 this.rebuildDynamic();
             }, z == this.selectedZone ? -265932737 : -266723542, -265932737, -854792);
-            this.addDrawableChild(select);
+            this.addRenderableWidget(select);
             this.dynamicWidgets.add(select);
-            StyledButton toggle = new StyledButton(this.leftX + this.leftW - btnW, rowY, btnW, 22, (Text)Text.translatable((String)(beaconsOn ? "zombiezcompanion.skulls.beacons.on" : "zombiezcompanion.skulls.beacons.off")), b -> {
+            StyledButton toggle = new StyledButton(this.leftX + this.leftW - btnW, rowY, btnW, 22, (Component)Component.translatable((String)(beaconsOn ? "zombiezcompanion.skulls.beacons.on" : "zombiezcompanion.skulls.beacons.off")), b -> {
                 if (this.module.hasZoneWaypoints(z.num())) {
                     this.module.removeZoneWaypoints(z.num());
                 } else {
@@ -114,7 +114,7 @@ extends Screen {
                 }
                 this.rebuildDynamic();
             }, beaconsOn ? -11441921 : -266723542, beaconsOn ? -8874241 : -265932737, -854792);
-            this.addDrawableChild(toggle);
+            this.addRenderableWidget(toggle);
             this.dynamicWidgets.add(toggle);
         }
         if (this.selectedZone == null || this.selectedZone.skulls().length == 0) {
@@ -122,17 +122,17 @@ extends Screen {
         }
         int batchY = this.contentY1 + 42;
         int batchW = (this.rightW - 6) / 2;
-        ButtonWidget markZone = (ButtonWidget)this.addDrawableChild(new StyledButton(this.rightX, batchY, batchW, 22, (Text)Text.translatable((String)"zombiezcompanion.skulls.zone.mark_all"), b -> {
+        Button markZone = (Button)this.addRenderableWidget(new StyledButton(this.rightX, batchY, batchW, 22, (Component)Component.translatable((String)"zombiezcompanion.skulls.zone.mark_all"), b -> {
             this.module.markZoneVisited(this.selectedZone.num());
             this.rebuildDynamic();
         }, -14709924, -14179731, -854792));
-        ButtonWidget unmarkZone = (ButtonWidget)this.addDrawableChild(new StyledButton(this.rightX + batchW + 6, batchY, batchW, 22, (Text)Text.translatable((String)"zombiezcompanion.skulls.zone.unmark_all"), b -> {
+        Button unmarkZone = (Button)this.addRenderableWidget(new StyledButton(this.rightX + batchW + 6, batchY, batchW, 22, (Component)Component.translatable((String)"zombiezcompanion.skulls.zone.unmark_all"), b -> {
             this.module.unmarkZoneVisited(this.selectedZone.num());
             this.rebuildDynamic();
         }, -12965328, -11716288, -854792));
         this.dynamicWidgets.add(markZone);
         this.dynamicWidgets.add(unmarkZone);
-        ButtonWidget route = (ButtonWidget)this.addDrawableChild(new StyledButton(this.rightX, batchY + 22 + 4, this.rightW, 22, (Text)Text.translatable((String)"zombiezcompanion.skulls.zone.route"), b -> {
+        Button route = (Button)this.addRenderableWidget(new StyledButton(this.rightX, batchY + 22 + 4, this.rightW, 22, (Component)Component.translatable((String)"zombiezcompanion.skulls.zone.route"), b -> {
             this.module.buildZoneRoute(this.selectedZone.num());
             this.rebuildDynamic();
         }, -14867392, -11441921, -854792));
@@ -149,25 +149,25 @@ extends Screen {
             boolean visited = this.module.isVisited(p.id());
             boolean hasWp = this.module.hasWaypoint(p);
             String visitLabel = (visited ? "\u2714 #" : "#") + SkullsModule.skullNumber(p);
-            StyledButton check = new StyledButton(this.rightX, rowY, chkW, 22, (Text)Text.literal((String)visitLabel), b -> {
+            StyledButton check = new StyledButton(this.rightX, rowY, chkW, 22, (Component)Component.literal((String)visitLabel), b -> {
                 this.module.setVisited(p.id(), !visited);
                 this.rebuildDynamic();
             }, visited ? -14709924 : -266723542, visited ? -14179731 : -265932737, -854792);
-            this.addDrawableChild(check);
+            this.addRenderableWidget(check);
             this.dynamicWidgets.add(check);
-            StyledButton wpBtn = new StyledButton(this.rightX + this.rightW - wpW, rowY, wpW, 22, (Text)Text.translatable((String)(hasWp ? "zombiezcompanion.skulls.skull.beacon.on" : "zombiezcompanion.skulls.skull.beacon.off")), b -> {
+            StyledButton wpBtn = new StyledButton(this.rightX + this.rightW - wpW, rowY, wpW, 22, (Component)Component.translatable((String)(hasWp ? "zombiezcompanion.skulls.skull.beacon.on" : "zombiezcompanion.skulls.skull.beacon.off")), b -> {
                 this.module.toggleSkullWaypoint(p);
                 this.rebuildDynamic();
             }, hasWp ? -11441921 : -266723542, hasWp ? -8874241 : -265932737, -854792);
-            this.addDrawableChild(wpBtn);
+            this.addRenderableWidget(wpBtn);
             this.dynamicWidgets.add(wpBtn);
         }
     }
 
-    private Text zoneRowLabel(ZombieZMapData.Zone z) {
+    private Component zoneRowLabel(ZombieZMapData.Zone z) {
         int v = this.module.visitedCount(z.num());
         int t = this.module.totalSkullsCount(z.num());
-        return Text.literal((String)("Z" + z.num() + " " + z.name() + "  " + v + "/" + t));
+        return Component.literal((String)("Z" + z.num() + " " + z.name() + "  " + v + "/" + t));
     }
 
     public boolean mouseScrolled(double mouseX, double mouseY, double horizontalAmount, double verticalAmount) {
@@ -188,7 +188,7 @@ extends Screen {
         return super.mouseScrolled(mouseX, mouseY, horizontalAmount, verticalAmount);
     }
 
-    public void render(DrawContext ctx, int mouseX, int mouseY, float delta) {
+    public void extractRenderState(GuiGraphicsExtractor ctx, int mouseX, int mouseY, float delta) {
         ctx.fill(0, 0, this.width, this.height, -872415232);
         ctx.fill(this.panelX1, this.panelY1, this.panelX2, this.panelY2, -183627755);
         ctx.fill(this.panelX1, this.titleY1, this.panelX2, this.titleY2, -183232737);
@@ -197,39 +197,40 @@ extends Screen {
         ctx.fill(this.panelX1, this.titleY1, this.panelX2, this.titleY1 + 2, -8874241);
         ctx.fill(this.panelX1, this.titleY2 - 1, this.panelX2, this.titleY2, -14736594);
         ctx.fill(this.panelX1, this.footerY1, this.panelX2, this.footerY1 + 1, -14736594);
-        ctx.drawBorder(this.panelX1, this.panelY1, this.panelX2 - this.panelX1, this.panelY2 - this.panelY1, -13880766);
-        ctx.drawTextWithShadow(this.textRenderer, (Text)Text.translatable((String)"zombiezcompanion.skulls.title"), this.panelX1 + 18, this.titleY1 + 12, -854792);
-        String totals = this.module.totalVisited() + " / " + this.module.totalSkulls() + " " + Text.translatable((String)"zombiezcompanion.skulls.visited").getString();
-        int tw = this.textRenderer.getWidth(totals);
-        ctx.drawTextWithShadow(this.textRenderer, (Text)Text.literal((String)totals), this.panelX2 - 18 - 30 - tw, this.titleY1 + 14, -8874241);
+        ctx.outline(this.panelX1, this.panelY1, this.panelX2 - this.panelX1, this.panelY2 - this.panelY1, -13880766);
+        ctx.text(this.font, (Component)Component.translatable((String)"zombiezcompanion.skulls.title"), this.panelX1 + 18, this.titleY1 + 12, -854792);
+        String totals = this.module.totalVisited() + " / " + this.module.totalSkulls() + " " + Component.translatable((String)"zombiezcompanion.skulls.visited").getString();
+        int tw = this.font.width(totals);
+        ctx.text(this.font, (Component)Component.literal((String)totals), this.panelX2 - 18 - 30 - tw, this.titleY1 + 14, -8874241);
         if (this.selectedZone != null) {
             String zh = "Z" + this.selectedZone.num() + " " + this.selectedZone.name() + " \u2014 " + this.module.visitedCount(this.selectedZone.num()) + " / " + this.module.totalSkullsCount(this.selectedZone.num());
-            ctx.drawTextWithShadow(this.textRenderer, (Text)Text.literal((String)zh), this.rightX, this.contentY1 + 12, -854792);
-            ctx.drawText(this.textRenderer, (Text)Text.translatable((String)"zombiezcompanion.skulls.legend"), this.rightX, this.contentY1 + 26, -8353376, false);
+            ctx.text(this.font, (Component)Component.literal((String)zh), this.rightX, this.contentY1 + 12, -854792);
+            ctx.text(this.font, (Component)Component.translatable((String)"zombiezcompanion.skulls.legend"), this.rightX, this.contentY1 + 26, -8353376, false);
             ctx.fill(this.rightX, this.contentY1 + 38, this.rightX + this.rightW, this.contentY1 + 39, -14736594);
         }
-        super.render(ctx, mouseX, mouseY, delta);
+        super.extractRenderState(ctx, mouseX, mouseY, delta);
     }
 
-    public void renderBackground(DrawContext ctx, int mouseX, int mouseY, float delta) {
+    public void extractBackground(GuiGraphicsExtractor ctx, int mouseX, int mouseY, float delta) {
     }
 
-    public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
+    public boolean keyPressed(net.minecraft.client.input.KeyEvent event) {
+        int keyCode = event.key(), scanCode = event.scancode(), modifiers = event.modifiers();
         if (keyCode == 256) {
-            this.close();
+            this.onClose();
             return true;
         }
-        return super.keyPressed(keyCode, scanCode, modifiers);
+        return super.keyPressed(event);
     }
 
-    public void close() {
+    public void onClose() {
         this.configManager.save();
-        if (this.client != null) {
-            this.client.setScreen(this.parent);
+        if (this.minecraft != null) {
+            this.minecraft.setScreen(this.parent);
         }
     }
 
-    public boolean shouldPause() {
+    public boolean isPauseScreen() {
         return false;
     }
 }

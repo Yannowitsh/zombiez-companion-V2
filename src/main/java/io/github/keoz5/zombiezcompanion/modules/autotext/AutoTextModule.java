@@ -1,5 +1,6 @@
 package io.github.keoz5.zombiezcompanion.modules.autotext;
 
+import com.mojang.blaze3d.platform.InputConstants;
 import io.github.keoz5.zombiezcompanion.config.AutoTextConfig;
 import io.github.keoz5.zombiezcompanion.config.ConfigManager;
 import io.github.keoz5.zombiezcompanion.core.Module;
@@ -9,10 +10,9 @@ import io.github.keoz5.zombiezcompanion.modules.autotext.AutoTextOptionsScreen;
 import io.github.keoz5.zombiezcompanion.modules.map.ZombieZDetector;
 import java.util.Arrays;
 import java.util.List;
-import net.minecraft.text.Text;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.util.InputUtil;
-import net.minecraft.client.gui.screen.Screen;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.network.chat.Component;
 import org.lwjgl.glfw.GLFW;
 
 public final class AutoTextModule
@@ -33,7 +33,7 @@ implements Module {
 
     @Override
     public String description() {
-        return Text.translatable((String)"zombiezcompanion.module.auto_text.desc").getString();
+        return Component.translatable((String)"zombiezcompanion.module.auto_text.desc").getString();
     }
 
     @Override
@@ -72,10 +72,10 @@ implements Module {
     }
 
     @Override
-    public void onClientTick(MinecraftClient client) {
+    public void onClientTick(Minecraft client) {
         int i;
         AutoTextConfig cfg = this.config();
-        if (client.currentScreen != null || client.player == null || client.getNetworkHandler() == null || !ZombieZDetector.isOnZombieZ()) {
+        if (client.screen != null || client.player == null || client.getConnection() == null || !ZombieZDetector.isOnZombieZ()) {
             Arrays.fill(this.pressedLastTick, false);
             return;
         }
@@ -92,7 +92,7 @@ implements Module {
                 this.pressedLastTick[i] = false;
                 continue;
             }
-            boolean bl = pressed = GLFW.glfwGetKey((long)client.getWindow().getHandle(), (int)entry.keyCode) == 1;
+            boolean bl = pressed = GLFW.glfwGetKey((long)client.getWindow().handle(), (int)entry.keyCode) == 1;
             if (pressed && !this.pressedLastTick[i]) {
                 this.sendConfiguredText(client, entry.text);
             }
@@ -103,21 +103,21 @@ implements Module {
         }
     }
 
-    private void sendConfiguredText(MinecraftClient client, String rawText) {
+    private void sendConfiguredText(Minecraft client, String rawText) {
         if (rawText == null) {
             return;
         }
         String text = rawText.trim();
-        if (text.isEmpty() || client.getNetworkHandler() == null) {
+        if (text.isEmpty() || client.getConnection() == null) {
             return;
         }
         if (text.startsWith("/")) {
             String command = text.substring(1).trim();
             if (!command.isEmpty()) {
-                client.getNetworkHandler().sendChatCommand(command);
+                client.getConnection().sendCommand(command);
             }
         } else {
-            client.getNetworkHandler().sendChatMessage(text);
+            client.getConnection().sendChat(text);
         }
     }
 
@@ -127,9 +127,9 @@ implements Module {
 
     static String keyLabel(int keyCode) {
         if (keyCode == -1) {
-            return Text.translatable((String)"zombiezcompanion.autotext.key.none").getString();
+            return Component.translatable((String)"zombiezcompanion.autotext.key.none").getString();
         }
-        return InputUtil.Type.KEYSYM.createFromCode(keyCode).getLocalizedText().getString();
+        return InputConstants.Type.KEYSYM.getOrCreate(keyCode).getDisplayName().getString();
     }
 }
 

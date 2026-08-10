@@ -6,11 +6,10 @@ import io.github.keoz5.zombiezcompanion.modules.stats.StatsModule;
 import io.github.keoz5.zombiezcompanion.ui.ModuleOptionsScreen;
 import io.github.keoz5.zombiezcompanion.ui.StatsScreen;
 import io.github.keoz5.zombiezcompanion.ui.widget.StyledButton;
-import net.minecraft.text.Text;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.gui.DrawContext;
-import net.minecraft.client.gui.Element;
-import net.minecraft.client.gui.screen.Screen;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.network.chat.Component;
 
 public final class StatsOptionsScreen
 extends ModuleOptionsScreen {
@@ -23,20 +22,20 @@ extends ModuleOptionsScreen {
         int x = this.panelX1 + 36;
         int y = this.contentY1 + 30;
         int optionW = Math.max(220, this.panelX2 - this.panelX1 - 72);
-        this.addDrawableChild(new StyledButton(x, y, optionW, 22, (Text)Text.translatable((String)"zombiezcompanion.stats.open"), btn -> MinecraftClient.getInstance().setScreen((Screen)new StatsScreen(this, this.configManager)), -11441921, -8874241, -854792));
-        this.addKeybindRow(x, y + 36, optionW, Keybinds.openStats(), (Text)Text.translatable((String)"key.zombiezcompanion.open_stats"));
-        this.addCrossLink(x, y + 96, optionW, "drop_alert", (Text)Text.translatable((String)"zombiezcompanion.crosslink.drop_alert"));
+        this.addRenderableWidget(new StyledButton(x, y, optionW, 22, (Component)Component.translatable((String)"zombiezcompanion.stats.open"), btn -> Minecraft.getInstance().setScreen((Screen)new StatsScreen(this, this.configManager)), -11441921, -8874241, -854792));
+        this.addKeybindRow(x, y + 36, optionW, Keybinds.openStats(), (Component)Component.translatable((String)"key.zombiezcompanion.open_stats"));
+        this.addCrossLink(x, y + 96, optionW, "drop_alert", (Component)Component.translatable((String)"zombiezcompanion.crosslink.drop_alert"));
     }
 
     @Override
-    public void render(DrawContext ctx, int mouseX, int mouseY, float delta) {
-        super.render(ctx, mouseX, mouseY, delta);
-        ctx.drawTextWithShadow(this.textRenderer, (Text)Text.translatable((String)"zombiezcompanion.stats.options.header"), this.panelX1 + 36, this.contentY1 + 12, -854792);
-        ctx.drawText(this.textRenderer, (Text)Text.translatable((String)"zombiezcompanion.stats.options.hint"), this.panelX1 + 36, this.contentY1 + 100, -8353376, false);
+    public void extractRenderState(GuiGraphicsExtractor ctx, int mouseX, int mouseY, float delta) {
+        super.extractRenderState(ctx, mouseX, mouseY, delta);
+        ctx.text(this.font, (Component)Component.translatable((String)"zombiezcompanion.stats.options.header"), this.panelX1 + 36, this.contentY1 + 12, -854792);
+        ctx.text(this.font, (Component)Component.translatable((String)"zombiezcompanion.stats.options.hint"), this.panelX1 + 36, this.contentY1 + 100, -8353376, false);
     }
 
     @Override
-    protected void renderOptionsBackground(DrawContext ctx) {
+    protected void renderOptionsBackground(GuiGraphicsExtractor ctx) {
         int x = this.panelX1 + 24;
         int y = this.contentY1 + 18;
         int w = this.panelX2 - this.panelX1 - 48;
@@ -46,7 +45,7 @@ extends ModuleOptionsScreen {
         ctx.fill(x, y, x + w, y + 2, -8874241);
         int divY = this.contentY1 + 30 + 88;
         ctx.fill(x + 12, divY, x + w - 12, divY + 1, -14736594);
-        ctx.drawBorder(x, y, w, h, -14736594);
+        ctx.outline(x, y, w, h, -14736594);
     }
 }
 

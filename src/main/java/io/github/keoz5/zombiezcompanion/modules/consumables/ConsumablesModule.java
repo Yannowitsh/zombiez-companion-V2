@@ -18,11 +18,11 @@ import java.util.List;
 import java.util.Locale;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-import net.minecraft.text.Text;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.font.TextRenderer;
-import net.minecraft.client.gui.DrawContext;
-import net.minecraft.client.gui.screen.Screen;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.Font;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.network.chat.Component;
 
 public final class ConsumablesModule
 implements Module {
@@ -47,7 +47,7 @@ implements Module {
 
     @Override
     public String description() {
-        return Text.translatable((String)"zombiezcompanion.module.consumables.desc").getString();
+        return Component.translatable((String)"zombiezcompanion.module.consumables.desc").getString();
     }
 
     @Override
@@ -91,7 +91,7 @@ implements Module {
     }
 
     @Override
-    public void onChatMessage(Text message, boolean overlay) {
+    public void onChatMessage(Component message, boolean overlay) {
         Matcher m;
         if (message == null) {
             return;
@@ -118,8 +118,8 @@ implements Module {
     }
 
     @Override
-    public void onClientTick(MinecraftClient client) {
-        if (client.player == null || client.world == null || !ZombieZDetector.isOnZombieZ()) {
+    public void onClientTick(Minecraft client) {
+        if (client.player == null || client.level == null || !ZombieZDetector.isOnZombieZ()) {
             this.flowers.clear();
             return;
         }
@@ -128,12 +128,12 @@ implements Module {
     }
 
     @Override
-    public void onHudRender(DrawContext ctx, float tickDelta) {
-        MinecraftClient client = MinecraftClient.getInstance();
-        if (client.player == null || client.currentScreen != null) {
+    public void onHudRender(GuiGraphicsExtractor ctx, float tickDelta) {
+        Minecraft client = Minecraft.getInstance();
+        if (client.player == null || client.screen != null) {
             return;
         }
-        if (client.options.hudHidden) {
+        if (client.options.hideGui) {
             return;
         }
         long now = System.currentTimeMillis();
@@ -145,15 +145,15 @@ implements Module {
         }
     }
 
-    private void renderLure(DrawContext ctx, MinecraftClient client, long now) {
-        TextRenderer tr = client.textRenderer;
+    private void renderLure(GuiGraphicsExtractor ctx, Minecraft client, long now) {
+        Font tr = client.font;
         long remainMs = Math.max(0L, this.lureExpiresAt - now);
-        String label = Text.translatable((String)"zombiezcompanion.consumables.lure.label", (Object[])new Object[]{ConsumablesModule.formatTime(remainMs)}).getString();
+        String label = Component.translatable((String)"zombiezcompanion.consumables.lure.label", (Object[])new Object[]{ConsumablesModule.formatTime(remainMs)}).getString();
         this.drawBoxMulti(ctx, client, tr, "lure_timer", label, 1, -13261, 0.0, 0.42);
     }
 
-    private void renderFlowers(DrawContext ctx, MinecraftClient client, long now) {
-        TextRenderer tr = client.textRenderer;
+    private void renderFlowers(GuiGraphicsExtractor ctx, Minecraft client, long now) {
+        Font tr = client.font;
         StringBuilder sb = new StringBuilder();
         int lines = 0;
         for (FlowerState f : this.flowers) {
@@ -161,19 +161,19 @@ implements Module {
             if (sb.length() > 0) {
                 sb.append('\n');
             }
-            String s = f.rarity.isEmpty() ? Text.translatable((String)"zombiezcompanion.consumables.flower.line", (Object[])new Object[]{ConsumablesModule.formatTime(remainMs)}).getString() : Text.translatable((String)"zombiezcompanion.consumables.flower.line_rarity", (Object[])new Object[]{f.rarity, ConsumablesModule.formatTime(remainMs)}).getString();
+            String s = f.rarity.isEmpty() ? Component.translatable((String)"zombiezcompanion.consumables.flower.line", (Object[])new Object[]{ConsumablesModule.formatTime(remainMs)}).getString() : Component.translatable((String)"zombiezcompanion.consumables.flower.line_rarity", (Object[])new Object[]{f.rarity, ConsumablesModule.formatTime(remainMs)}).getString();
             sb.append(s);
             ++lines;
         }
         this.drawBoxMulti(ctx, client, tr, "flower_timer", sb.toString(), lines, -21812, 0.0, 0.48);
     }
 
-    private void drawBoxMulti(DrawContext ctx, MinecraftClient client, TextRenderer tr, String elementId, String text, int lines, int accent, double defFx, double defFy) {
+    private void drawBoxMulti(GuiGraphicsExtractor ctx, Minecraft client, Font tr, String elementId, String text, int lines, int accent, double defFx, double defFy) {
         int padding = 4;
         int lineH = 10;
         int maxWidth = 0;
         for (String line : text.split("\n")) {
-            maxWidth = Math.max(maxWidth, tr.getWidth(line));
+            maxWidth = Math.max(maxWidth, tr.width(line));
         }
         int boxW = maxWidth + padding * 2;
         int boxH = lineH * lines + padding * 2;
@@ -181,23 +181,23 @@ implements Module {
         double scale = HudAnchor.scale(hud, elementId);
         int scaledW = (int)Math.round((double)boxW * scale);
         int scaledH = (int)Math.round((double)boxH * scale);
-        int screenW = ctx.getScaledWindowWidth();
-        int screenH = ctx.getScaledWindowHeight();
+        int screenW = ctx.guiWidth();
+        int screenH = ctx.guiHeight();
         int boxX = HudAnchor.resolveX(hud, elementId, screenW, scaledW, defFx);
         int boxY = HudAnchor.resolveY(hud, elementId, screenH, scaledH, defFy);
-        ctx.getMatrices().push();
-        ctx.getMatrices().translate((float)boxX, (float)boxY, 0.0f);
+        ctx.pose().pushMatrix();
+        ctx.pose().translate((float)boxX, (float)boxY);
         if (scale != 1.0) {
-            ctx.getMatrices().scale((float)scale, (float)scale, 1.0f);
+            ctx.pose().scale((float)scale, (float)scale);
         }
         ctx.fill(0, 0, boxW, boxH, -1073741824);
         ctx.fill(0, 0, boxW, 1, accent);
         int y = padding;
         for (String line : text.split("\n")) {
-            ctx.drawTextWithShadow(tr, (Text)Text.literal((String)line), padding, y, -854792);
+            ctx.text(tr, (Component)Component.literal((String)line), padding, y, -854792);
             y += lineH;
         }
-        ctx.getMatrices().pop();
+        ctx.pose().popMatrix();
         HudElements.report(elementId, boxX, boxY, scaledW, scaledH);
     }
 

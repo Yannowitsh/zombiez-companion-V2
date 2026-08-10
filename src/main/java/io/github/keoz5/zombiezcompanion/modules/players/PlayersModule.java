@@ -1,5 +1,6 @@
 package io.github.keoz5.zombiezcompanion.modules.players;
 
+import io.github.keoz5.zombiezcompanion.ModInfo;
 import io.github.keoz5.zombiezcompanion.ZombieZCompanionClient;
 import io.github.keoz5.zombiezcompanion.config.ConfigManager;
 import io.github.keoz5.zombiezcompanion.config.PlayersConfig;
@@ -24,16 +25,16 @@ import java.util.concurrent.CompletableFuture;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import net.fabricmc.loader.api.FabricLoader;
-import net.minecraft.text.Text;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.gui.screen.Screen;
-import net.minecraft.client.network.ClientPlayNetworkHandler;
-import net.minecraft.client.network.PlayerListEntry;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.multiplayer.ClientPacketListener;
+import net.minecraft.client.multiplayer.PlayerInfo;
+import net.minecraft.network.chat.Component;
 
 public final class PlayersModule
 implements Module {
     public static final String ID = "players";
-    private static final String ENDPOINT = "https://zombiez-companion-api.keoz5.workers.dev";
+    private static final String ENDPOINT = ModInfo.API_BASE;
     private static final long PRESENCE_INTERVAL_MS = 10000L;
     private static final long PRESENCE_REFRESH_MS = 5000L;
     private static final long LEADERBOARD_INTERVAL_MS = 60000L;
@@ -58,7 +59,7 @@ implements Module {
 
     @Override
     public String description() {
-        return Text.translatable((String)"zombiezcompanion.module.players.desc").getString();
+        return Component.translatable((String)"zombiezcompanion.module.players.desc").getString();
     }
 
     @Override
@@ -113,10 +114,10 @@ implements Module {
     }
 
     @Override
-    public void onClientTick(MinecraftClient client) {
+    public void onClientTick(Minecraft client) {
         boolean onServer;
         long now = System.currentTimeMillis();
-        boolean bl = onServer = client.player != null && client.world != null && ZombieZDetector.isOnZombieZ();
+        boolean bl = onServer = client.player != null && client.level != null && ZombieZDetector.isOnZombieZ();
         if (!onServer) {
             if (this.presenceActive) {
                 this.deletePresence();
@@ -143,7 +144,7 @@ implements Module {
         }
     }
 
-    private void sendLeaderboard(MinecraftClient client) {
+    private void sendLeaderboard(Minecraft client) {
         String name;
         if (client.player == null) {
             return;
@@ -172,15 +173,15 @@ implements Module {
             name = client.player.getName().getString();
         }
         String body = String.format(Locale.ROOT, "{\"uuid\":\"%s\",\"name\":\"%s\",\"prestige\":%d,\"level\":%d,\"rodeur\":%d,\"kills\":%d,\"points\":%d}", PlayersModule.escape(this.selfUuid()), PlayersModule.escape(name), Math.max(0, prestige), level, Math.max(0, stats.rodeurLevel()), stats.killsTotal(), stats.pointsTotal());
-        this.postAsync("https://zombiez-companion-api.keoz5.workers.dev/leaderboard", body);
+        this.postAsync(ModInfo.API_BASE + "/leaderboard", body);
     }
 
-    private static String tabDisplayName(MinecraftClient client) {
+    private static String tabDisplayName(Minecraft client) {
         try {
             String disp;
-            PlayerListEntry entry;
-            ClientPlayNetworkHandler nh = client.getNetworkHandler();
-            if (nh != null && (entry = nh.getPlayerListEntry(client.player.getUuid())) != null && entry.getDisplayName() != null && !(disp = entry.getDisplayName().getString().replaceAll("\u00a7.", "").trim()).isBlank()) {
+            PlayerInfo entry;
+            ClientPacketListener nh = client.getConnection();
+            if (nh != null && (entry = nh.getPlayerInfo(client.player.getUUID())) != null && entry.getTabListDisplayName() != null && !(disp = entry.getTabListDisplayName().getString().replaceAll("\u00a7.", "").trim()).isBlank()) {
                 return disp;
             }
         }
@@ -208,25 +209,25 @@ implements Module {
         PresenceCache.clear();
     }
 
-    private void sendPresence(MinecraftClient client) {
+    private void sendPresence(Minecraft client) {
         if (client.player == null) {
             return;
         }
         String body = String.format(Locale.ROOT, "{\"uuid\":\"%s\",\"name\":\"%s\",\"server\":\"%s\",\"x\":%.1f,\"z\":%.1f,\"modVersion\":\"%s\"}", PlayersModule.escape(this.selfUuid()), PlayersModule.escape(client.player.getName().getString()), SERVER_KEY, client.player.getX(), client.player.getZ(), PlayersModule.escape(PlayersModule.modVersion()));
-        this.postAsync("https://zombiez-companion-api.keoz5.workers.dev/presence", body);
+        this.postAsync(ModInfo.API_BASE + "/presence", body);
         this.presenceActive = true;
     }
 
     private static String modVersion() {
-        return FabricLoader.getInstance().getModContainer("zombiezcompanion").map(c -> c.getMetadata().getVersion().getFriendlyString()).orElse("?");
+        return FabricLoader.getInstance().getModContainer(ModInfo.MOD_ID).map(c -> c.getMetadata().getVersion().getFriendlyString()).orElse("?");
     }
 
     private void deletePresence() {
-        this.deleteAsync("https://zombiez-companion-api.keoz5.workers.dev/presence/" + this.selfUuid());
+        this.deleteAsync(ModInfo.API_BASE + "/presence/" + this.selfUuid());
     }
 
     private void refreshPresences() {
-        this.getAsync("https://zombiez-companion-api.keoz5.workers.dev/presence?server=rinaorc.com").thenAccept(resp -> {
+        this.getAsync(ModInfo.API_BASE + "/presence?server=rinaorc.com").thenAccept(resp -> {
             if (resp != null) {
                 PresenceCache.update(resp, this.selfUuid());
             }

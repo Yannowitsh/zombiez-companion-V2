@@ -2,21 +2,21 @@ package io.github.keoz5.zombiezcompanion.ui.widget;
 
 import java.util.function.DoubleConsumer;
 import java.util.function.DoubleFunction;
-import net.minecraft.text.Text;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.gui.DrawContext;
-import net.minecraft.client.gui.widget.SliderWidget;
-import net.minecraft.text.StringVisitable;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.components.AbstractSliderButton;
+import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.FormattedText;
 
 public final class StyledSlider
-extends SliderWidget {
+extends AbstractSliderButton {
     private final double min;
     private final double max;
     private final DoubleConsumer onChange;
-    private final DoubleFunction<Text> labeller;
+    private final DoubleFunction<Component> labeller;
 
-    public StyledSlider(int x, int y, int width, int height, double initial, double min, double max, DoubleConsumer onChange, DoubleFunction<Text> labeller) {
-        super(x, y, width, height, (Text)Text.empty(), StyledSlider.normalize(initial, min, max));
+    public StyledSlider(int x, int y, int width, int height, double initial, double min, double max, DoubleConsumer onChange, DoubleFunction<Component> labeller) {
+        super(x, y, width, height, (Component)Component.empty(), StyledSlider.normalize(initial, min, max));
         this.min = min;
         this.max = max;
         this.onChange = onChange;
@@ -47,7 +47,7 @@ extends SliderWidget {
         }
     }
 
-    public void renderWidget(DrawContext ctx, int mouseX, int mouseY, float delta) {
+    public void extractWidgetRenderState(GuiGraphicsExtractor ctx, int mouseX, int mouseY, float delta) {
         int x1 = this.getX();
         int y1 = this.getY();
         int x2 = x1 + this.getWidth();
@@ -94,11 +94,11 @@ extends SliderWidget {
         ctx.fill(hx1 + 1, hy2 - 1, hx2 - 1, hy2, hb);
         ctx.fill(hx1, hy1 + 1, hx1 + 1, hy2 - 1, hb);
         ctx.fill(hx2 - 1, hy1 + 1, hx2, hy2 - 1, hb);
-        MinecraftClient mc = MinecraftClient.getInstance();
-        int textW = mc.textRenderer.getWidth((StringVisitable)this.getMessage());
+        Minecraft mc = Minecraft.getInstance();
+        int textW = mc.font.width((FormattedText)this.getMessage());
         int tx = x1 + (this.getWidth() - textW) / 2;
         int ty = y1 + (this.getHeight() - 8) / 2;
-        ctx.drawTextWithShadow(mc.textRenderer, this.getMessage(), tx, ty, -854792);
+        ctx.text(mc.font, this.getMessage(), tx, ty, -854792);
     }
 }
 

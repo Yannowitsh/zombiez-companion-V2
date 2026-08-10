@@ -3,10 +3,10 @@ package io.github.keoz5.zombiezcompanion.core;
 import io.github.keoz5.zombiezcompanion.core.ModuleCategory;
 import io.github.keoz5.zombiezcompanion.core.ModuleContext;
 import java.util.List;
-import net.minecraft.text.Text;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.gui.DrawContext;
-import net.minecraft.client.gui.screen.Screen;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.network.chat.Component;
 
 public interface Module {
     public String id();
@@ -52,13 +52,13 @@ public interface Module {
     default public void onDisable() {
     }
 
-    default public void onClientTick(MinecraftClient client) {
+    default public void onClientTick(Minecraft client) {
     }
 
-    default public void onChatMessage(Text message, boolean overlay) {
+    default public void onChatMessage(Component message, boolean overlay) {
     }
 
-    default public void onHudRender(DrawContext drawContext, float tickDelta) {
+    default public void onHudRender(GuiGraphicsExtractor drawContext, float tickDelta) {
     }
 
     default public void onJoinWorld() {

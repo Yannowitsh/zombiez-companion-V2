@@ -1,7 +1,7 @@
 package io.github.keoz5.zombiezcompanion.core;
 
 import java.util.Locale;
-import net.minecraft.text.Text;
+import net.minecraft.network.chat.Component;
 
 public enum ModuleCategory {
     MAP,
@@ -12,7 +12,7 @@ public enum ModuleCategory {
 
 
     public String displayName() {
-        return Text.translatable((String)("zombiezcompanion.category." + this.name().toLowerCase(Locale.ROOT))).getString();
+        return Component.translatable((String)("zombiezcompanion.category." + this.name().toLowerCase(Locale.ROOT))).getString();
     }
 }
 

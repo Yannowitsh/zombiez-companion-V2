@@ -1,6 +1,7 @@
 package io.github.keoz5.zombiezcompanion.modules.map;
 
-import com.mojang.blaze3d.systems.RenderSystem;
+import com.mojang.blaze3d.vertex.PoseStack;
+import com.mojang.blaze3d.vertex.VertexConsumer;
 import io.github.keoz5.zombiezcompanion.ZombieZCompanionClient;
 import io.github.keoz5.zombiezcompanion.config.ConfigManager;
 import io.github.keoz5.zombiezcompanion.config.MapConfig;
@@ -8,48 +9,43 @@ import io.github.keoz5.zombiezcompanion.core.Module;
 import io.github.keoz5.zombiezcompanion.core.ModuleCategory;
 import io.github.keoz5.zombiezcompanion.core.ModuleContext;
 import io.github.keoz5.zombiezcompanion.core.ModuleManager;
-import io.github.keoz5.zombiezcompanion.mixin.GameRendererAccessor;
 import io.github.keoz5.zombiezcompanion.modules.map.WaypointsOptionsScreen;
 import io.github.keoz5.zombiezcompanion.modules.map.ZombieZDetector;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.List;
 import java.util.Locale;
-import java.util.OptionalDouble;
 import java.util.UUID;
-import net.fabricmc.fabric.api.client.rendering.v1.WorldRenderContext;
-import net.fabricmc.fabric.api.client.rendering.v1.WorldRenderEvents;
-import net.minecraft.client.render.RenderLayer;
-import net.minecraft.util.math.Box;
-import net.minecraft.util.math.Vec3d;
-import net.minecraft.text.Text;
-import net.minecraft.client.render.VertexFormats;
-import net.minecraft.client.render.VertexFormat;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.font.TextRenderer;
-import net.minecraft.client.gui.DrawContext;
-import net.minecraft.client.render.Camera;
-import net.minecraft.client.gui.screen.Screen;
-import net.minecraft.client.util.math.MatrixStack;
-import net.minecraft.client.render.VertexConsumer;
-import net.minecraft.client.render.VertexConsumerProvider;
-import net.minecraft.client.render.Frustum;
-import net.minecraft.client.render.RenderPhase;
-import net.minecraft.text.MutableText;
-import net.minecraft.text.StringVisitable;
-import net.minecraft.util.math.RotationAxis;
+import net.fabricmc.fabric.api.client.rendering.v1.level.LevelRenderContext;
+import net.fabricmc.fabric.api.client.rendering.v1.level.LevelRenderEvents;
+import net.minecraft.client.Camera;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.Font;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.renderer.MultiBufferSource;
+import net.minecraft.client.renderer.rendertype.RenderType;
+import net.minecraft.client.renderer.rendertype.RenderTypes;
+import net.minecraft.client.renderer.culling.Frustum;
+import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.FormattedText;
+import net.minecraft.network.chat.MutableComponent;
+import net.minecraft.world.phys.AABB;
+import net.minecraft.world.phys.Vec3;
 
 public final class WaypointsModule
 implements Module {
     public static final String ID = "waypoints";
-    public static final RenderLayer BEACON_LINES_BEHIND = BeaconLayer.build("behind", true);
-    public static final RenderLayer BEACON_LINES_FRONT = BeaconLayer.build("front", false);
+    // 26.1 removed custom render-layer builders (RenderType.CompositeState/RenderStateShard
+    // are no longer usable this way), so the beacons now use the built-in line render type.
+    public static final RenderType BEACON_LINES_BEHIND = RenderTypes.lines();
+    public static final RenderType BEACON_LINES_FRONT = RenderTypes.lines();
     private static final int DEATH_WAYPOINT_COLOR = 0xEF4444;
     private static final int DEATH_CONFIRM_TICKS = 8;
     private ConfigManager configManager;
     private boolean wasAlive = true;
     private int deadTicks;
-    private Vec3d lastLivePos;
+    private Vec3 lastLivePos;
 
     public static boolean isEnabled() {
         ModuleManager mm = ZombieZCompanionClient.moduleManager();
@@ -68,7 +64,7 @@ implements Module {
 
     @Override
     public String description() {
-        return Text.translatable((String)"zombiezcompanion.module.waypoints.desc").getString();
+        return Component.translatable((String)"zombiezcompanion.module.waypoints.desc").getString();
     }
 
     @Override
@@ -94,15 +90,15 @@ implements Module {
     @Override
     public void onRegister(ModuleContext ctx) {
         this.configManager = ctx.configManager();
-        WorldRenderEvents.LAST.register(this::renderBeacons);
+        LevelRenderEvents.AFTER_TRANSLUCENT_TERRAIN.register(this::renderBeacons);
     }
 
-    private void renderBeacons(WorldRenderContext ctx) {
+    private void renderBeacons(LevelRenderContext ctx) {
         if (!WaypointsModule.isEnabled()) {
             return;
         }
-        MinecraftClient client = MinecraftClient.getInstance();
-        if (client.player == null || client.world == null) {
+        Minecraft client = Minecraft.getInstance();
+        if (client.player == null || client.level == null) {
             return;
         }
         if (!ZombieZDetector.isOnZombieZ()) {
@@ -112,40 +108,33 @@ implements Module {
         if (cfg.waypointMarkerStyle != 0) {
             return;
         }
-        Camera camera = ctx.camera();
-        Vec3d cam = camera.getPos();
-        MatrixStack matrices = ctx.matrixStack();
-        VertexConsumerProvider.Immediate immediate = client.getBufferBuilders().getEntityVertexConsumers();
-        TextRenderer tr = client.textRenderer;
-        Frustum frustum = ctx.frustum();
+        Camera camera = client.gameRenderer.getMainCamera();
+        Vec3 cam = camera.position();
+        PoseStack matrices = ctx.poseStack();
+        MultiBufferSource.BufferSource immediate = client.renderBuffers().bufferSource();
+        Font tr = client.font;
         String currentDim = WaypointsModule.currentDimensionId(client);
-        matrices.push();
+        matrices.pushPose();
         for (MapConfig.Waypoint wp : cfg.waypoints) {
-            if (!wp.visible || !WaypointsModule.isInDimension(wp, currentDim) || WaypointsModule.isSameGuideTarget(cfg.guideTarget, wp) || !WaypointsModule.isBeaconVisible(frustum, wp.x, wp.y, wp.z)) continue;
+            if (!wp.visible || !WaypointsModule.isInDimension(wp, currentDim) || WaypointsModule.isSameGuideTarget(cfg.guideTarget, wp)) continue;
             WaypointsModule.drawBeacon(matrices, immediate, camera, cam, tr, wp.x, wp.y, wp.z, wp.label, 0xFF000000 | wp.colorRgb);
         }
         if (cfg.guideTarget != null && !"Waypoint".equals(cfg.guideTarget.type)) {
             MapConfig.GuideTarget t = cfg.guideTarget;
-            if (WaypointsModule.isBeaconVisible(frustum, t.x, t.y, t.z)) {
-                WaypointsModule.drawBeacon(matrices, immediate, camera, cam, tr, t.x, t.y, t.z, t.label, 0xFF000000 | t.colorRgb);
-            }
+            WaypointsModule.drawBeacon(matrices, immediate, camera, cam, tr, t.x, t.y, t.z, t.label, 0xFF000000 | t.colorRgb);
         }
-        matrices.pop();
-        RenderSystem.disableDepthTest();
-        RenderSystem.lineWidth((float)4.0f);
-        immediate.draw();
-        RenderSystem.lineWidth((float)1.0f);
-        RenderSystem.enableDepthTest();
+        matrices.popPose();
+        immediate.endBatch();
     }
 
     public static boolean isBeaconVisible(Frustum frustum, double wx, double wy, double wz) {
-        return frustum.isVisible(new Box(wx - 0.5, wy, wz - 0.5, wx + 0.5, wy + 4.0, wz + 0.5));
+        return frustum.isVisible(new AABB(wx - 0.5, wy, wz - 0.5, wx + 0.5, wy + 4.0, wz + 0.5));
     }
 
     /** Registry id of the player's current dimension (e.g. "minecraft:overworld"), or null. */
-    public static String currentDimensionId(MinecraftClient client) {
-        return client != null && client.world != null
-                ? client.world.getRegistryKey().getValue().toString()
+    public static String currentDimensionId(Minecraft client) {
+        return client != null && client.level != null
+                ? client.level.dimension().identifier().toString()
                 : null;
     }
 
@@ -162,7 +151,7 @@ implements Module {
         return target != null && "Waypoint".equals(target.type) && Math.abs(target.x - waypoint.x) < 0.01 && Math.abs(target.z - waypoint.z) < 0.01;
     }
 
-    public static void drawBeacon(MatrixStack matrices, VertexConsumerProvider.Immediate immediate, Camera camera, Vec3d cam, TextRenderer tr, double wx, double wy, double wz, String label, int color) {
+    public static void drawBeacon(PoseStack matrices, MultiBufferSource.BufferSource immediate, Camera camera, Vec3 cam, Font tr, double wx, double wy, double wz, String label, int color) {
         double dx = wx - cam.x;
         double dy = wy - cam.y;
         double dz = wz - cam.z;
@@ -175,7 +164,7 @@ implements Module {
         WaypointsModule.drawWorldText(matrices, immediate, camera, tr, text, color, dx, labelY, dz, (float)Math.min(0.15, Math.max(0.033, dist * 0.0032)), -1610612736);
     }
 
-    private static void drawBeaconShape(MatrixStack matrices, VertexConsumerProvider.Immediate immediate, RenderLayer layer, double dx, double dy, double dz, int color, float alpha) {
+    private static void drawBeaconShape(PoseStack matrices, MultiBufferSource.BufferSource immediate, RenderType layer, double dx, double dy, double dz, int color, float alpha) {
         float cx = (float)dx;
         float by = (float)dy + 0.12f;
         float cz = (float)dz;
@@ -187,7 +176,7 @@ implements Module {
         float b = (float)(color & 0xFF) / 255.0f;
         float a = alpha;
         VertexConsumer lines = immediate.getBuffer(layer);
-        MatrixStack.Entry entry = matrices.peek();
+        PoseStack.Pose entry = matrices.last();
         float xMin = cx - pillarHalf;
         float xMax = cx + pillarHalf;
         float zMin = cz - pillarHalf;
@@ -212,20 +201,20 @@ implements Module {
         WaypointsModule.drawLine(lines, entry, cx, yTop, cz - ringHalf, cx, yTop, cz + ringHalf, r, g, b, a);
     }
 
-    private static void drawWorldText(MatrixStack matrices, VertexConsumerProvider.Immediate immediate, Camera camera, TextRenderer tr, String text, int color, double x, double y, double z, float scale, int bgColor) {
-        matrices.push();
+    private static void drawWorldText(PoseStack matrices, MultiBufferSource.BufferSource immediate, Camera camera, Font tr, String text, int color, double x, double y, double z, float scale, int bgColor) {
+        matrices.pushPose();
         matrices.translate(x, y, z);
-        matrices.multiply(camera.getRotation());
+        matrices.mulPose(camera.rotation());
         matrices.scale(-scale, -scale, scale);
-        int w = tr.getWidth(text);
-        tr.draw(text, (float)(-w) / 2.0f, -4.0f, color, false, matrices.peek().getPositionMatrix(), (VertexConsumerProvider)immediate, TextRenderer.TextLayerType.SEE_THROUGH, bgColor, 0xF000F0);
-        tr.draw(text, (float)(-w) / 2.0f, -4.0f, color, false, matrices.peek().getPositionMatrix(), (VertexConsumerProvider)immediate, TextRenderer.TextLayerType.NORMAL, 0, 0xF000F0);
-        matrices.pop();
+        int w = tr.width(text);
+        tr.drawInBatch(text, (float)(-w) / 2.0f, -4.0f, color, false, matrices.last().pose(), (MultiBufferSource)immediate, Font.DisplayMode.SEE_THROUGH, bgColor, 0xF000F0);
+        tr.drawInBatch(text, (float)(-w) / 2.0f, -4.0f, color, false, matrices.last().pose(), (MultiBufferSource)immediate, Font.DisplayMode.NORMAL, 0, 0xF000F0);
+        matrices.popPose();
     }
 
-    private static void drawLine(VertexConsumer lines, MatrixStack.Entry entry, float x1, float y1, float z1, float x2, float y2, float z2, float r, float g, float b, float a) {
-        lines.vertex(entry, x1, y1, z1).color(r, g, b, a).normal(entry, 0.0f, 1.0f, 0.0f);
-        lines.vertex(entry, x2, y2, z2).color(r, g, b, a).normal(entry, 0.0f, 1.0f, 0.0f);
+    private static void drawLine(VertexConsumer lines, PoseStack.Pose entry, float x1, float y1, float z1, float x2, float y2, float z2, float r, float g, float b, float a) {
+        lines.addVertex(entry, x1, y1, z1).setColor(r, g, b, a).setNormal(entry, 0.0f, 1.0f, 0.0f).setLineWidth(4.0f);
+        lines.addVertex(entry, x2, y2, z2).setColor(r, g, b, a).setNormal(entry, 0.0f, 1.0f, 0.0f).setLineWidth(4.0f);
     }
 
     @Override
@@ -234,7 +223,7 @@ implements Module {
     }
 
     @Override
-    public void onClientTick(MinecraftClient client) {
+    public void onClientTick(Minecraft client) {
         boolean alive;
         if (client.player == null) {
             this.wasAlive = true;
@@ -246,7 +235,7 @@ implements Module {
         if (alive) {
             this.wasAlive = true;
             this.deadTicks = 0;
-            this.lastLivePos = client.player.getPos();
+            this.lastLivePos = client.player.position();
             return;
         }
         if (!this.wasAlive) {
@@ -271,7 +260,7 @@ implements Module {
         this.lastLivePos = null;
     }
 
-    private void createDeathWaypoint(Vec3d pos) {
+    private void createDeathWaypoint(Vec3 pos) {
         MapConfig.Waypoint wp = new MapConfig.Waypoint();
         wp.id = UUID.randomUUID().toString();
         wp.label = "Mort " + new SimpleDateFormat("HH:mm", Locale.ROOT).format(new Date());
@@ -281,16 +270,16 @@ implements Module {
         wp.colorRgb = 0xEF4444;
         wp.createdAt = System.currentTimeMillis();
         wp.visible = true;
-        wp.dimension = WaypointsModule.currentDimensionId(MinecraftClient.getInstance());
+        wp.dimension = WaypointsModule.currentDimensionId(Minecraft.getInstance());
         this.config().waypoints.add(wp);
         this.configManager.save();
     }
 
     @Override
-    public void onHudRender(DrawContext ctx, float tickDelta) {
+    public void onHudRender(GuiGraphicsExtractor ctx, float tickDelta) {
         double relative;
-        MinecraftClient client = MinecraftClient.getInstance();
-        if (client.player == null || client.world == null || client.currentScreen != null) {
+        Minecraft client = Minecraft.getInstance();
+        if (client.player == null || client.level == null || client.screen != null) {
             return;
         }
         if (!ZombieZDetector.isOnZombieZ()) {
@@ -311,7 +300,7 @@ implements Module {
         double dx = target.x - client.player.getX();
         double dz = target.z - client.player.getZ();
         double bearing = Math.toDegrees(Math.atan2(-dx, dz));
-        for (relative = bearing - (double)client.player.getYaw(); relative > 180.0; relative -= 360.0) {
+        for (relative = bearing - (double)client.player.getYRot(); relative > 180.0; relative -= 360.0) {
         }
         while (relative < -180.0) {
             relative += 360.0;
@@ -319,7 +308,7 @@ implements Module {
         this.renderGuide(ctx, target, Math.hypot(dx, dz), relative);
     }
 
-    private void renderHudBeacons(DrawContext ctx, MinecraftClient client, MapConfig cfg, float tickDelta) {
+    private void renderHudBeacons(GuiGraphicsExtractor ctx, Minecraft client, MapConfig cfg, float tickDelta) {
         String currentDim = WaypointsModule.currentDimensionId(client);
         for (MapConfig.Waypoint wp : cfg.waypoints) {
             if (!wp.visible || !WaypointsModule.isInDimension(wp, currentDim) || WaypointsModule.isSameGuideTarget(cfg.guideTarget, wp)) continue;
@@ -331,32 +320,32 @@ implements Module {
         }
     }
 
-    public static void renderScreenBeacon(DrawContext ctx, MinecraftClient client, double wx, double wy, double wz, String label, int color) {
+    public static void renderScreenBeacon(GuiGraphicsExtractor ctx, Minecraft client, double wx, double wy, double wz, String label, int color) {
         WaypointsModule.renderScreenBeacon(ctx, client, 1.0f, wx, wy, wz, label, color);
     }
 
-    public static void renderScreenBeacon(DrawContext ctx, MinecraftClient client, float tickDelta, double wx, double wy, double wz, String label, int color) {
+    public static void renderScreenBeacon(GuiGraphicsExtractor ctx, Minecraft client, float tickDelta, double wx, double wy, double wz, String label, int color) {
         double yNorm;
         double xNorm;
         if (client == null || client.player == null || client.gameRenderer == null) {
             return;
         }
-        Camera camera = client.gameRenderer.getCamera();
-        Vec3d cam = camera.getPos();
-        Vec3d toTarget = new Vec3d(wx - cam.x, wy + 1.45 - cam.y, wz - cam.z);
+        Camera camera = client.gameRenderer.getMainCamera();
+        Vec3 cam = camera.position();
+        Vec3 toTarget = new Vec3(wx - cam.x, wy + 1.45 - cam.y, wz - cam.z);
         double distance = toTarget.length();
         if (distance < 0.35) {
             return;
         }
-        int screenW = ctx.getScaledWindowWidth();
-        int screenH = ctx.getScaledWindowHeight();
-        Vec3d forward = Vec3d.fromPolar((float)camera.getPitch(), (float)camera.getYaw()).normalize();
-        Vec3d right = Vec3d.fromPolar((float)0.0f, (float)(camera.getYaw() + 90.0f)).normalize();
-        Vec3d up = right.crossProduct(forward).normalize();
-        double depth = toTarget.dotProduct(forward);
-        double xCamera = toTarget.dotProduct(right);
-        double yCamera = toTarget.dotProduct(up);
-        double verticalFov = Math.toRadians(WaypointsModule.clamp(((GameRendererAccessor)client.gameRenderer).zombiezcompanion$invokeGetFov(camera, tickDelta, true), 12.0, 110.0));
+        int screenW = ctx.guiWidth();
+        int screenH = ctx.guiHeight();
+        Vec3 forward = Vec3.directionFromRotation((float)camera.xRot(), (float)camera.yaw()).normalize();
+        Vec3 right = Vec3.directionFromRotation((float)0.0f, (float)(camera.yaw() + 90.0f)).normalize();
+        Vec3 up = right.cross(forward).normalize();
+        double depth = toTarget.dot(forward);
+        double xCamera = toTarget.dot(right);
+        double yCamera = toTarget.dot(up);
+        double verticalFov = Math.toRadians(WaypointsModule.clamp((double)camera.getFov(), 12.0, 110.0));
         double aspect = (double)screenW / Math.max(1.0, (double)screenH);
         if (depth > 0.05) {
             double halfHeight = Math.tan(verticalFov / 2.0) * depth;
@@ -378,7 +367,7 @@ implements Module {
         int margin = 14;
         x = (int)WaypointsModule.clamp(x, margin, screenW - margin);
         y = (int)WaypointsModule.clamp(y, margin, screenH - margin);
-        TextRenderer tr = client.textRenderer;
+        Font tr = client.font;
         String safeLabel = label == null || label.isBlank() ? "Rep\u00e8re" : label;
         String text = safeLabel + " [" + (int)Math.round(distance) + "m]";
         int markerR = 6;
@@ -387,16 +376,16 @@ implements Module {
         ctx.fill(x - 1, y - markerR - 5, x + 2, y - markerR, color);
         ctx.fill(x - 1, y + markerR, x + 2, y + markerR + 6, color);
         ctx.fill(x - 1, y - 1, x + 2, y + 2, -1);
-        int textW = Math.min(320, tr.getWidth(text) + 12);
+        int textW = Math.min(320, tr.width(text) + 12);
         int boxX = (int)WaypointsModule.clamp((double)x - (double)textW / 2.0, 6.0, screenW - textW - 6);
         int boxY = (int)WaypointsModule.clamp(y - markerR - 22, 6.0, screenH - 18);
         ctx.fill(boxX + 1, boxY + 1, boxX + textW + 1, boxY + 17, -1442840576);
         ctx.fill(boxX, boxY, boxX + textW, boxY + 16, -804647918);
-        ctx.drawBorder(boxX, boxY, textW, 16, color);
-        ctx.drawTextWithShadow(tr, tr.trimToWidth(text, textW - 8), boxX + 5, boxY + 5, -1);
+        ctx.outline(boxX, boxY, textW, 16, color);
+        ctx.text(tr, tr.plainSubstrByWidth(text, textW - 8), boxX + 5, boxY + 5, -1);
     }
 
-    private static void drawHudDiamond(DrawContext ctx, int x, int y, int radius, int color) {
+    private static void drawHudDiamond(GuiGraphicsExtractor ctx, int x, int y, int radius, int color) {
         for (int dy = -radius; dy <= radius; ++dy) {
             int half = radius - Math.abs(dy);
             ctx.fill(x - half, y + dy, x + half + 1, y + dy + 1, color);
@@ -414,26 +403,26 @@ implements Module {
         return new GuidePoint(cfg.guideTarget.label, cfg.guideTarget.x, cfg.guideTarget.z, cfg.guideTarget.colorRgb);
     }
 
-    private void renderGuide(DrawContext ctx, GuidePoint target, double distance, double relativeAngle) {
-        TextRenderer textRenderer = MinecraftClient.getInstance().textRenderer;
-        MutableText label = Text.translatable((String)"zombiezcompanion.waypoint.guide.label", (Object[])new Object[]{target.label, (int)Math.round(distance)});
-        int boxW = Math.max(100, textRenderer.getWidth((StringVisitable)label) + 34);
+    private void renderGuide(GuiGraphicsExtractor ctx, GuidePoint target, double distance, double relativeAngle) {
+        Font textRenderer = Minecraft.getInstance().font;
+        MutableComponent label = Component.translatable((String)"zombiezcompanion.waypoint.guide.label", (Object[])new Object[]{target.label, (int)Math.round(distance)});
+        int boxW = Math.max(100, textRenderer.width((FormattedText)label) + 34);
         int boxH = 22;
         int[] pos = this.guidePosition(ctx, boxW, boxH);
         int x = pos[0];
         int y = pos[1];
         ctx.fill(x + 2, y + 2, x + boxW + 2, y + boxH + 2, -1442840576);
         ctx.fill(x, y, x + boxW, y + boxH, -183627755);
-        ctx.drawBorder(x, y, boxW, boxH, -8874241);
-        ctx.getMatrices().push();
-        ctx.getMatrices().translate((float)(x + 12), (float)(y + 11), 0.0f);
-        ctx.getMatrices().multiply(RotationAxis.POSITIVE_Z.rotationDegrees((float)relativeAngle));
+        ctx.outline(x, y, boxW, boxH, -8874241);
+        ctx.pose().pushMatrix();
+        ctx.pose().translate((float)(x + 12), (float)(y + 11));
+        ctx.pose().rotate((float)Math.toRadians((float)relativeAngle));
         this.drawGuideArrow(ctx, 0xFF000000 | target.colorRgb);
-        ctx.getMatrices().pop();
-        ctx.drawTextWithShadow(textRenderer, (Text)label, x + 26, y + 7, -1);
+        ctx.pose().popMatrix();
+        ctx.text(textRenderer, (Component)label, x + 26, y + 7, -1);
     }
 
-    private void drawGuideArrow(DrawContext ctx, int color) {
+    private void drawGuideArrow(GuiGraphicsExtractor ctx, int color) {
         int shadow = -872415232;
         ctx.fill(-1, -7, 2, 7, shadow);
         ctx.fill(-4, -5, 5, -2, shadow);
@@ -444,12 +433,12 @@ implements Module {
         ctx.fill(-1, 3, 2, 6, -1);
     }
 
-    private int[] guidePosition(DrawContext ctx, int boxW, int boxH) {
+    private int[] guidePosition(GuiGraphicsExtractor ctx, int boxW, int boxH) {
         int y;
         int x;
         MapConfig cfg = this.config();
-        int windowW = ctx.getScaledWindowWidth();
-        int windowH = ctx.getScaledWindowHeight();
+        int windowW = ctx.guiWidth();
+        int windowH = ctx.guiHeight();
         int miniSize = Math.max(80, Math.min(260, cfg.miniMapSize));
         int margin = 8;
         int miniX = switch (cfg.miniMapCorner) {
@@ -503,21 +492,10 @@ implements Module {
             case 3 -> "zombiezcompanion.waypoint.position.bottom_center";
             default -> "zombiezcompanion.waypoint.position.above_minimap";
         };
-        return Text.translatable((String)key).getString();
+        return Component.translatable((String)key).getString();
     }
 
     private record GuidePoint(String label, double x, double z, int colorRgb) {
-    }
-
-    private static final class BeaconLayer
-    extends RenderLayer {
-        private BeaconLayer(String name, VertexFormat fmt, VertexFormat.DrawMode mode, int size, boolean crumbling, boolean translucent, Runnable startAction, Runnable endAction) {
-            super(name, fmt, mode, size, crumbling, translucent, startAction, endAction);
-        }
-
-        static RenderLayer build(String suffix, boolean throughWall) {
-            return RenderLayer.of((String)("zombiezcompanion:beacon_" + suffix), (VertexFormat)VertexFormats.LINES, (VertexFormat.DrawMode)VertexFormat.DrawMode.DEBUG_LINES, (int)1536, (boolean)false, (boolean)false, (RenderLayer.MultiPhaseParameters)RenderLayer.MultiPhaseParameters.builder().program(LINES_PROGRAM).lineWidth(new RenderPhase.LineWidth(OptionalDouble.of(throughWall ? 2.5 : 4.0))).layering(VIEW_OFFSET_Z_LAYERING).transparency(TRANSLUCENT_TRANSPARENCY).target(ITEM_ENTITY_TARGET).writeMaskState(ALL_MASK).cull(DISABLE_CULLING).depthTest(throughWall ? ALWAYS_DEPTH_TEST : LEQUAL_DEPTH_TEST).build(false));
-        }
     }
 }
 
