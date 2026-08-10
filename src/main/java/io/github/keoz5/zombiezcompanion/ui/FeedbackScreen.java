@@ -20,7 +20,7 @@ import net.minecraft.network.chat.Component;
 public final class FeedbackScreen
 extends Screen {
     private static final String ENDPOINT = ModInfo.API_BASE + "/feedback";
-    private static final int MAX_LEN = 1500;
+    private static final int MAX_LEN = 5000;
     private final Screen parent;
     private final ConfigManager configManager;
     private int panelX1;
@@ -72,7 +72,7 @@ extends Screen {
         int editorW = this.panelX2 - this.panelX1 - 72;
         int editorH = this.contentY2 - editorY - 24;
         this.editor = new MultiLineEditBox.Builder().setX(this.panelX1 + 36).setY(editorY).setPlaceholder((Component)Component.translatable((String)"zombiezcompanion.feedback.placeholder")).build(this.font, editorW, editorH, (Component)Component.translatable((String)"zombiezcompanion.feedback.placeholder"));
-        this.editor.setCharacterLimit(1500);
+        this.editor.setCharacterLimit(5000);
         this.addRenderableWidget(this.editor);
         int btnH = 20;
         int btnY = this.footerY1 + (34 - btnH) / 2;
@@ -194,9 +194,9 @@ extends Screen {
         ctx.text(this.font, (Component)Component.translatable((String)"zombiezcompanion.feedback.subtitle"), this.panelX1 + 18, this.titleY1 + 23, -8353376, false);
         ctx.text(this.font, (Component)Component.translatable((String)"zombiezcompanion.feedback.category"), this.panelX1 + 36, this.contentY1 + 14, -8874241, false);
         int len = this.editor == null ? 0 : this.editor.getValue().length();
-        String counter = len + " / 1500";
+        String counter = len + " / 5000";
         int cw = this.font.width(counter);
-        ctx.text(this.font, (Component)Component.literal((String)counter), this.panelX2 - 36 - cw, this.contentY2 - 12, len > 1500 ? -32640 : -8353376, false);
+        ctx.text(this.font, (Component)Component.literal((String)counter), this.panelX2 - 36 - cw, this.contentY2 - 12, len > 5000 ? -32640 : -8353376, false);
         if (!this.statusText.isEmpty()) {
             ctx.text(this.font, (Component)Component.literal((String)this.statusText), this.panelX1 + 36, this.contentY2 - 12, this.statusColor, false);
         }

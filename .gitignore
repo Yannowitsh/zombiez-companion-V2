@@ -24,3 +24,8 @@ eclipse/
 # OS
 .DS_Store
 Thumbs.db
+
+# Cloudflare Worker (backend) — local cache / deps / dev secrets
+backend/.wrangler/
+backend/node_modules/
+backend/.dev.vars

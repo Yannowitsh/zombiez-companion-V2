@@ -1,0 +1,15 @@
+name = "zombiezcompanion-api"
+main = "src/index.js"
+compatibility_date = "2025-06-01"
+
+# KV storage. Create it once with:
+#   wrangler kv namespace create ZZC
+# then paste the printed id below.
+[[kv_namespaces]]
+binding = "ZZC"
+id = "18d37de7288747eb805295edb4eb847f"
+
+# Update these on each mod release to drive the in-game update notification.
+[vars]
+LATEST_VERSION = "1.0.2"
+DOWNLOAD_URL = "https://github.com/Yannowitsh/zombiez-companion-V2/releases"
