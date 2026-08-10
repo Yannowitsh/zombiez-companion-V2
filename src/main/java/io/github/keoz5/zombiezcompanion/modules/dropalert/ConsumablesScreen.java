@@ -6,10 +6,9 @@ import io.github.keoz5.zombiezcompanion.modules.dropalert.DropClassifier;
 import io.github.keoz5.zombiezcompanion.ui.widget.StyledButton;
 import java.util.ArrayList;
 import java.util.List;
-import net.minecraft.text.Text;
-import net.minecraft.client.gui.DrawContext;
-import net.minecraft.client.gui.Element;
-import net.minecraft.client.gui.screen.Screen;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.network.chat.Component;
 
 public final class ConsumablesScreen
 extends Screen {
@@ -35,7 +34,7 @@ extends Screen {
     }
 
     public ConsumablesScreen(Screen parent, ConfigManager configManager) {
-        super((Text)Text.translatable((String)"zombiezcompanion.drop_alert.consumables.title"));
+        super((Component)Component.translatable((String)"zombiezcompanion.drop_alert.consumables.title"));
         this.parent = parent;
         this.configManager = configManager;
     }
@@ -78,27 +77,27 @@ extends Screen {
             int bx = x0 + i % 2 * (colW + gap);
             int by = this.listTop + drawRow * 22;
             boolean shown = this.isShown(c);
-            this.addDrawableChild(new StyledButton(bx, by, colW, 18, this.label(c, shown), btn -> {
+            this.addRenderableWidget(new StyledButton(bx, by, colW, 18, this.label(c, shown), btn -> {
                 this.toggle(c);
                 boolean now = this.isShown(c);
                 btn.setMessage(this.label(c, now));
                 ((StyledButton)btn).setColors(now ? -14709924 : -12965328, now ? -14179731 : -11716288);
             }, shown ? -14709924 : -12965328, shown ? -14179731 : -11716288, -854792));
         }
-        this.addDrawableChild(new StyledButton(x0, this.panelY2 - 30, 120, 20, (Text)Text.translatable((String)"zombiezcompanion.drop_alert.consumables.show_all"), b -> {
+        this.addRenderableWidget(new StyledButton(x0, this.panelY2 - 30, 120, 20, (Component)Component.translatable((String)"zombiezcompanion.drop_alert.consumables.show_all"), b -> {
             this.config().hiddenConsumables.clear();
             this.configManager.save();
-            this.clearAndInit();
+            this.rebuildWidgets();
         }, -14709924, -14179731, -854792));
-        this.addDrawableChild(new StyledButton(this.panelX2 - 12 - 110, this.panelY2 - 30, 110, 20, (Text)Text.translatable((String)"zombiezcompanion.button.back"), b -> this.close(), -266723542, -265932737, -854792));
+        this.addRenderableWidget(new StyledButton(this.panelX2 - 12 - 110, this.panelY2 - 30, 110, 20, (Component)Component.translatable((String)"zombiezcompanion.button.back"), b -> this.onClose(), -266723542, -265932737, -854792));
     }
 
     private void addFilterButton(int x, int y, String value, String key) {
         boolean active = this.filter.equals(value);
-        this.addDrawableChild(new StyledButton(x, y, 92, 18, (Text)Text.translatable((String)key), b -> {
+        this.addRenderableWidget(new StyledButton(x, y, 92, 18, (Component)Component.translatable((String)key), b -> {
             this.filter = value;
             this.scrollRows = 0;
-            this.clearAndInit();
+            this.rebuildWidgets();
         }, active ? -11441921 : -266723542, active ? -8874241 : -265932737, -854792));
     }
 
@@ -114,44 +113,45 @@ extends Screen {
         this.configManager.save();
     }
 
-    private Text label(DropClassifier.Consumable c, boolean shown) {
-        return Text.literal((String)c.name());
+    private Component label(DropClassifier.Consumable c, boolean shown) {
+        return Component.literal((String)c.name());
     }
 
     public boolean mouseScrolled(double mouseX, double mouseY, double h, double v) {
         this.scrollRows = Math.max(0, this.scrollRows + (v > 0.0 ? -1 : 1));
-        this.clearAndInit();
+        this.rebuildWidgets();
         return true;
     }
 
-    public void render(DrawContext ctx, int mouseX, int mouseY, float delta) {
+    public void extractRenderState(GuiGraphicsExtractor ctx, int mouseX, int mouseY, float delta) {
         ctx.fill(0, 0, this.width, this.height, -872415232);
         ctx.fill(this.panelX1, this.panelY1, this.panelX2, this.panelY2, -183627755);
         ctx.fill(this.panelX1, this.panelY1, this.panelX2, this.panelY1 + 2, -8874241);
-        ctx.drawBorder(this.panelX1, this.panelY1, this.panelX2 - this.panelX1, this.panelY2 - this.panelY1, -13880766);
-        ctx.drawCenteredTextWithShadow(this.textRenderer, (Text)Text.translatable((String)"zombiezcompanion.drop_alert.consumables.title"), (this.panelX1 + this.panelX2) / 2, this.panelY1 + 16, -854792);
-        super.render(ctx, mouseX, mouseY, delta);
+        ctx.outline(this.panelX1, this.panelY1, this.panelX2 - this.panelX1, this.panelY2 - this.panelY1, -13880766);
+        ctx.centeredText(this.font, (Component)Component.translatable((String)"zombiezcompanion.drop_alert.consumables.title"), (this.panelX1 + this.panelX2) / 2, this.panelY1 + 16, -854792);
+        super.extractRenderState(ctx, mouseX, mouseY, delta);
     }
 
-    public void renderBackground(DrawContext ctx, int mouseX, int mouseY, float delta) {
+    public void extractBackground(GuiGraphicsExtractor ctx, int mouseX, int mouseY, float delta) {
     }
 
-    public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
+    public boolean keyPressed(net.minecraft.client.input.KeyEvent event) {
+        int keyCode = event.key(), scanCode = event.scancode(), modifiers = event.modifiers();
         if (keyCode == 256) {
-            this.close();
+            this.onClose();
             return true;
         }
-        return super.keyPressed(keyCode, scanCode, modifiers);
+        return super.keyPressed(event);
     }
 
-    public void close() {
+    public void onClose() {
         this.configManager.save();
-        if (this.client != null) {
-            this.client.setScreen(this.parent);
+        if (this.minecraft != null) {
+            this.minecraft.setScreen(this.parent);
         }
     }
 
-    public boolean shouldPause() {
+    public boolean isPauseScreen() {
         return false;
     }
 }

@@ -11,10 +11,9 @@
   "key.zombiezcompanion.open_waypoints": "Ouvrir les waypoints ZombieZ",
   "key.zombiezcompanion.clear_guide": "Retirer le guidage ZombieZ",
   "key.zombiezcompanion.open_skulls": "Ouvrir crânes ZombieZ",
-  "key.zombiezcompanion.zoom": "Maintenir le zoom ZombieZ",
   "key.zombiezcompanion.minimap_peek": "Agrandir la mini-map (maintenir)",
   "key.zombiezcompanion.tp_refuge": "TP refuge le plus proche (event)",
-  "key.categories.zombiezcompanion": "ZombieZ Companion",
+  "key.category.zombiezcompanion.main": "ZombieZ Companion",
 
   "screen.zombiezcompanion.config.title": "ZombieZ Companion",
   "modmenu.summary.zombiezcompanion": "Mod client de confort pour le serveur ZombieZ.",
@@ -269,8 +268,8 @@
   "zombiezcompanion.mini_events.world_boss.label": "World Boss",
   "zombiezcompanion.mini_events.toggle.marchand_timer": "Timer Marchand",
   "zombiezcompanion.mini_events.toggle.world_boss_timer": "Timer World Boss",
-  "zombiezcompanion.mini_events.marchand.timer": "Marchand — dernier : %s · prochain : %s",
-  "zombiezcompanion.mini_events.world_boss.timer": "World Boss — dernier : %s · prochain : %s",
+  "zombiezcompanion.mini_events.marchand.timer": "Marchand — dernier spawn : %s",
+  "zombiezcompanion.mini_events.world_boss.timer": "World Boss — dernier spawn : %s",
 
   "zombiezcompanion.keybinds.title": "Touches",
   "zombiezcompanion.keybinds.open": "Touches",

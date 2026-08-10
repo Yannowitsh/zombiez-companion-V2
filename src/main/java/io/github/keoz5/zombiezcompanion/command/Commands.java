@@ -5,41 +5,41 @@ import io.github.keoz5.zombiezcompanion.config.ConfigManager;
 import io.github.keoz5.zombiezcompanion.core.Module;
 import io.github.keoz5.zombiezcompanion.core.ModuleManager;
 import io.github.keoz5.zombiezcompanion.log.Log;
-import net.fabricmc.fabric.api.client.command.v2.ClientCommandManager;
+import net.fabricmc.fabric.api.client.command.v2.ClientCommands;
 import net.fabricmc.fabric.api.client.command.v2.ClientCommandRegistrationCallback;
 import net.fabricmc.fabric.api.client.command.v2.FabricClientCommandSource;
-import net.minecraft.text.Text;
+import net.minecraft.network.chat.Component;
 
 public final class Commands {
     private Commands() {
     }
 
     public static void register(ConfigManager configManager, ModuleManager moduleManager) {
-        ClientCommandRegistrationCallback.EVENT.register((dispatcher, access) -> dispatcher.register((LiteralArgumentBuilder)((LiteralArgumentBuilder)((LiteralArgumentBuilder)ClientCommandManager.literal((String)"zzc").then(ClientCommandManager.literal((String)"debug").executes(ctx -> {
+        ClientCommandRegistrationCallback.EVENT.register((dispatcher, access) -> dispatcher.register((LiteralArgumentBuilder)((LiteralArgumentBuilder)((LiteralArgumentBuilder)ClientCommands.literal((String)"zzc").then(ClientCommands.literal((String)"debug").executes(ctx -> {
             boolean next;
             configManager.get().debugMode = next = !configManager.get().debugMode;
             configManager.save();
-            ((FabricClientCommandSource)ctx.getSource()).sendFeedback((Text)Text.translatable((String)"zombiezcompanion.command.debug.state", (Object[])new Object[]{Commands.stateText(next)}));
+            ((FabricClientCommandSource)ctx.getSource()).sendFeedback((Component)Component.translatable((String)"zombiezcompanion.command.debug.state", (Object[])new Object[]{Commands.stateText(next)}));
             Log.info("Debug mode " + (next ? "ON" : "OFF"));
             return 1;
-        }))).then(ClientCommandManager.literal((String)"status").executes(ctx -> {
+        }))).then(ClientCommands.literal((String)"status").executes(ctx -> {
             StringBuilder sb = new StringBuilder();
-            sb.append(Text.translatable((String)"zombiezcompanion.command.status.header").getString()).append('\n');
+            sb.append(Component.translatable((String)"zombiezcompanion.command.status.header").getString()).append('\n');
             for (Module m : moduleManager.modules()) {
-                sb.append(Text.translatable((String)"zombiezcompanion.command.status.module_line", (Object[])new Object[]{m.id(), Commands.stateText(moduleManager.isEnabled(m.id()))}).getString()).append('\n');
+                sb.append(Component.translatable((String)"zombiezcompanion.command.status.module_line", (Object[])new Object[]{m.id(), Commands.stateText(moduleManager.isEnabled(m.id()))}).getString()).append('\n');
             }
-            sb.append(Text.translatable((String)"zombiezcompanion.command.status.debug_line", (Object[])new Object[]{Commands.stateText(configManager.get().debugMode)}).getString());
-            ((FabricClientCommandSource)ctx.getSource()).sendFeedback((Text)Text.literal((String)sb.toString()));
+            sb.append(Component.translatable((String)"zombiezcompanion.command.status.debug_line", (Object[])new Object[]{Commands.stateText(configManager.get().debugMode)}).getString());
+            ((FabricClientCommandSource)ctx.getSource()).sendFeedback((Component)Component.literal((String)sb.toString()));
             return 1;
-        }))).then(ClientCommandManager.literal((String)"reload").executes(ctx -> {
+        }))).then(ClientCommands.literal((String)"reload").executes(ctx -> {
             configManager.save();
-            ((FabricClientCommandSource)ctx.getSource()).sendFeedback((Text)Text.translatable((String)"zombiezcompanion.command.reload.saved"));
+            ((FabricClientCommandSource)ctx.getSource()).sendFeedback((Component)Component.translatable((String)"zombiezcompanion.command.reload.saved"));
             return 1;
         }))));
     }
 
     private static String stateText(boolean enabled) {
-        return Text.translatable((String)(enabled ? "zombiezcompanion.command.state.on" : "zombiezcompanion.command.state.off")).getString();
+        return Component.translatable((String)(enabled ? "zombiezcompanion.command.state.on" : "zombiezcompanion.command.state.off")).getString();
     }
 }
 

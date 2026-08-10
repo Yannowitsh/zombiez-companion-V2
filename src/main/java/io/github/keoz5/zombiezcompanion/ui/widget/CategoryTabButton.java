@@ -1,22 +1,22 @@
 package io.github.keoz5.zombiezcompanion.ui.widget;
 
 import java.util.function.BooleanSupplier;
-import net.minecraft.text.Text;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.gui.DrawContext;
-import net.minecraft.client.gui.widget.ButtonWidget;
-import net.minecraft.text.StringVisitable;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.components.Button;
+import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.FormattedText;
 
 public final class CategoryTabButton
-extends ButtonWidget {
+extends Button {
     private final BooleanSupplier selected;
 
-    public CategoryTabButton(int x, int y, int width, int height, Text message, ButtonWidget.PressAction action, BooleanSupplier selected) {
-        super(x, y, width, height, message, action, DEFAULT_NARRATION_SUPPLIER);
+    public CategoryTabButton(int x, int y, int width, int height, Component message, Button.OnPress action, BooleanSupplier selected) {
+        super(x, y, width, height, message, action, DEFAULT_NARRATION);
         this.selected = selected;
     }
 
-    protected void renderWidget(DrawContext ctx, int mouseX, int mouseY, float delta) {
+    protected void extractContents(GuiGraphicsExtractor ctx, int mouseX, int mouseY, float delta) {
         int textArgb;
         int bg;
         boolean hovered;
@@ -48,11 +48,11 @@ extends ButtonWidget {
         ctx.fill(x1 + 1, y2 - 1, x2 - 1, y2, border);
         ctx.fill(x1, y1 + 1, x1 + 1, y2 - 1, border);
         ctx.fill(x2 - 1, y1 + 1, x2, y2 - 1, border);
-        MinecraftClient mc = MinecraftClient.getInstance();
-        int textWidth = mc.textRenderer.getWidth((StringVisitable)this.getMessage());
+        Minecraft mc = Minecraft.getInstance();
+        int textWidth = mc.font.width((FormattedText)this.getMessage());
         int tx = x1 + (this.getWidth() - textWidth) / 2;
         int ty = y1 + (this.getHeight() - 8) / 2;
-        ctx.drawTextWithShadow(mc.textRenderer, this.getMessage(), tx, ty, textArgb);
+        ctx.text(mc.font, this.getMessage(), tx, ty, textArgb);
     }
 }
 

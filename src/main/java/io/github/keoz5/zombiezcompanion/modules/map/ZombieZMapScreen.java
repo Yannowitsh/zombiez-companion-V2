@@ -13,15 +13,14 @@ import io.github.keoz5.zombiezcompanion.modules.skulls.SkullsModule;
 import io.github.keoz5.zombiezcompanion.modules.telemetry.PresenceCache;
 import java.util.List;
 import java.util.Locale;
-import net.minecraft.client.render.RenderLayer;
-import net.minecraft.text.Text;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.gui.DrawContext;
-import net.minecraft.client.gui.widget.TextFieldWidget;
-import net.minecraft.client.gui.Element;
-import net.minecraft.client.gui.screen.Screen;
-import net.minecraft.text.MutableText;
-import net.minecraft.text.StringVisitable;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.components.EditBox;
+import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.renderer.rendertype.RenderType;
+import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.FormattedText;
+import net.minecraft.network.chat.MutableComponent;
 
 public final class ZombieZMapScreen
 extends Screen {
@@ -56,19 +55,19 @@ extends Screen {
     private boolean waypointClickDragged;
     private double waypointClickStartX;
     private double waypointClickStartY;
-    private TextFieldWidget searchField;
+    private EditBox searchField;
     private String searchText = "";
     private SearchMatch searchMatch;
 
     public ZombieZMapScreen(ConfigManager configManager) {
-        super((Text)Text.translatable((String)"zombiezcompanion.map.title"));
+        super((Component)Component.translatable((String)"zombiezcompanion.map.title"));
         this.configManager = configManager;
         this.initialWorldX = null;
         this.initialWorldZ = null;
     }
 
     public ZombieZMapScreen(ConfigManager configManager, double initialWorldX, double initialWorldZ) {
-        super((Text)Text.translatable((String)"zombiezcompanion.map.title"));
+        super((Component)Component.translatable((String)"zombiezcompanion.map.title"));
         this.configManager = configManager;
         this.initialWorldX = initialWorldX;
         this.initialWorldZ = initialWorldZ;
@@ -85,15 +84,15 @@ extends Screen {
             this.initializedView = true;
         }
         this.clampView();
-        this.searchField = new TextFieldWidget(this.textRenderer, 10, 38, 120, 20, (Text)Text.translatable((String)"zombiezcompanion.map.search.placeholder"));
+        this.searchField = new EditBox(this.font, 10, 38, 120, 20, (Component)Component.translatable((String)"zombiezcompanion.map.search.placeholder"));
         this.searchField.setMaxLength(40);
-        this.searchField.setPlaceholder((Text)Text.translatable((String)"zombiezcompanion.map.search.placeholder"));
-        this.searchField.setText(this.searchText);
-        this.searchField.setChangedListener(s -> {
+        this.searchField.setHint((Component)Component.translatable((String)"zombiezcompanion.map.search.placeholder"));
+        this.searchField.setValue(this.searchText);
+        this.searchField.setResponder(s -> {
             this.searchText = s;
             this.searchMatch = this.computeSearchMatch((String)s);
         });
-        this.addDrawableChild(this.searchField);
+        this.addRenderableWidget(this.searchField);
         this.searchMatch = this.computeSearchMatch(this.searchText);
     }
 
@@ -139,7 +138,7 @@ extends Screen {
         this.centerOn(ZombieZMapData.mapX(this.searchMatch.x), ZombieZMapData.mapY(this.searchMatch.z));
     }
 
-    public void render(DrawContext ctx, int mouseX, int mouseY, float delta) {
+    public void extractRenderState(GuiGraphicsExtractor ctx, int mouseX, int mouseY, float delta) {
         ctx.fill(0, 0, this.width, this.height, -301463026);
         this.renderBackdrop(ctx);
         int clipX1 = (int)Math.max((double)this.viewportLeft(), Math.floor(this.mapLeft()));
@@ -159,15 +158,15 @@ extends Screen {
             ctx.disableScissor();
         }
         this.renderChrome(ctx, mouseX, mouseY);
-        super.render(ctx, mouseX, mouseY, delta);
+        super.extractRenderState(ctx, mouseX, mouseY, delta);
         this.renderHoverInfo(ctx, mouseX, mouseY);
         this.renderOffServerOverlay(ctx);
     }
 
-    public void renderBackground(DrawContext ctx, int mouseX, int mouseY, float delta) {
+    public void extractBackground(GuiGraphicsExtractor ctx, int mouseX, int mouseY, float delta) {
     }
 
-    private void renderOffServerOverlay(DrawContext ctx) {
+    private void renderOffServerOverlay(GuiGraphicsExtractor ctx) {
         if (ZombieZDetector.isOnZombieZ()) {
             return;
         }
@@ -178,13 +177,13 @@ extends Screen {
         ctx.fill(bx + 2, by + 4, bx + boxW + 2, by + boxH + 4, -1442840576);
         ctx.fill(bx, by, bx + boxW, by + boxH, -183627755);
         ctx.fill(bx, by, bx + boxW, by + 2, -8874241);
-        ctx.drawBorder(bx, by, boxW, boxH, -8874241);
-        ctx.drawCenteredTextWithShadow(this.textRenderer, (Text)Text.translatable((String)"zombiezcompanion.map.off_server.title"), bx + boxW / 2, by + 14, -854792);
-        ctx.drawCenteredTextWithShadow(this.textRenderer, (Text)Text.translatable((String)"zombiezcompanion.map.off_server.hint"), bx + boxW / 2, by + 30, -8353376);
-        ctx.drawCenteredTextWithShadow(this.textRenderer, (Text)Text.translatable((String)"zombiezcompanion.map.off_server.host"), bx + boxW / 2, by + 46, -8874241);
+        ctx.outline(bx, by, boxW, boxH, -8874241);
+        ctx.centeredText(this.font, (Component)Component.translatable((String)"zombiezcompanion.map.off_server.title"), bx + boxW / 2, by + 14, -854792);
+        ctx.centeredText(this.font, (Component)Component.translatable((String)"zombiezcompanion.map.off_server.hint"), bx + boxW / 2, by + 30, -8353376);
+        ctx.centeredText(this.font, (Component)Component.translatable((String)"zombiezcompanion.map.off_server.host"), bx + boxW / 2, by + 46, -8874241);
     }
 
-    private void renderTiles(DrawContext ctx) {
+    private void renderTiles(GuiGraphicsExtractor ctx) {
         int startCx = Math.max(0, (int)Math.floor(this.screenToMapX(this.viewportLeft()) / 128.0));
         int endCx = Math.min(9, (int)Math.floor(this.screenToMapX(this.viewportRight()) / 128.0));
         int startCy = Math.max(0, (int)Math.floor(this.screenToMapY(this.viewportTop()) / 128.0));
@@ -194,12 +193,12 @@ extends Screen {
             for (int cx = startCx; cx <= endCx; ++cx) {
                 int x = this.screenX(cx * 128);
                 int y = this.screenY(cy * 128);
-                ctx.drawTexture(RenderLayer::getGuiTextured, ZombieZMapData.tileId(cx, cy), x, y, 0.0f, 0.0f, drawSize, drawSize, 128, 128, 128, 128);
+                ctx.blit(net.minecraft.client.renderer.RenderPipelines.GUI_TEXTURED, ZombieZMapData.tileId(cx, cy), x, y, 0.0f, 0.0f, drawSize, drawSize, 128, 128, 128, 128);
             }
         }
     }
 
-    private void renderLayers(DrawContext ctx) {
+    private void renderLayers(GuiGraphicsExtractor ctx) {
         MapConfig cfg = this.config();
         if (cfg.showZones) {
             this.renderZones(ctx);
@@ -215,7 +214,7 @@ extends Screen {
         }
     }
 
-    private void renderRefuges(DrawContext ctx) {
+    private void renderRefuges(GuiGraphicsExtractor ctx) {
         int fill = 1143842406;
         int border = -13254793;
         for (ZombieZMapData.Refuge refuge : ZombieZMapData.REFUGES) {
@@ -230,14 +229,14 @@ extends Screen {
             ctx.fill(x1, y1, x1 + 1, y2, border);
             ctx.fill(x2 - 1, y1, x2, y2, border);
             if (!(this.zoom >= 0.55)) continue;
-            MutableText label = Text.literal((String)refuge.name());
-            int labelX = (x1 + x2) / 2 - this.textRenderer.getWidth((StringVisitable)label) / 2;
+            MutableComponent label = Component.literal((String)refuge.name());
+            int labelX = (x1 + x2) / 2 - this.font.width((FormattedText)label) / 2;
             int labelY = (y1 + y2) / 2 - 4;
-            ctx.drawTextWithShadow(this.textRenderer, (Text)label, labelX, labelY, -1638420);
+            ctx.text(this.font, (Component)label, labelX, labelY, -1638420);
         }
     }
 
-    private void renderZones(DrawContext ctx) {
+    private void renderZones(GuiGraphicsExtractor ctx) {
         int left = (int)Math.max((double)this.viewportLeft(), Math.floor(this.mapLeft()));
         int right = (int)Math.min((double)this.viewportRight(), Math.ceil(this.mapRight()));
         for (ZombieZMapData.Zone zone : ZombieZMapData.ZONES) {
@@ -253,12 +252,12 @@ extends Screen {
                 ctx.fill(left, yMax, right, yMax + 1, color);
             }
             if (!(this.zoom >= 0.45) || (labelY = (yMin + yMax) / 2) < this.viewportTop() + 4 || labelY > this.viewportBottom() - 12) continue;
-            MutableText label = Text.translatable((String)"zombiezcompanion.map.zone_label", (Object[])new Object[]{zone.num(), zone.name()});
-            ctx.drawTextWithShadow(this.textRenderer, (Text)label, left + 6, labelY, -570425345);
+            MutableComponent label = Component.translatable((String)"zombiezcompanion.map.zone_label", (Object[])new Object[]{zone.num(), zone.name()});
+            ctx.text(this.font, (Component)label, left + 6, labelY, -570425345);
         }
     }
 
-    private void renderCranes(DrawContext ctx) {
+    private void renderCranes(GuiGraphicsExtractor ctx) {
         for (ZombieZMapData.Zone zone : ZombieZMapData.ZONES) {
             for (ZombieZMapData.Point skull : zone.skulls()) {
                 SkullHit hit = new SkullHit(zone, skull);
@@ -267,13 +266,13 @@ extends Screen {
         }
     }
 
-    private void renderBosses(DrawContext ctx) {
+    private void renderBosses(GuiGraphicsExtractor ctx) {
         for (ZombieZMapData.Boss boss : ZombieZMapData.BOSSES) {
             this.drawMarker(ctx, boss.x(), boss.z(), 0xEF4444, 4, true, this.zoom >= 0.55 ? boss.name() : null, this.isSameGuideTarget(this.targetFromBoss(boss)));
         }
     }
 
-    private void renderWaypoints(DrawContext ctx) {
+    private void renderWaypoints(GuiGraphicsExtractor ctx) {
         for (MapConfig.Waypoint waypoint : this.config().waypoints) {
             if (SkullsModule.isSkullWaypointId(waypoint.id)) continue;
             int rgb = waypoint.visible ? waypoint.colorRgb : ZombieZMapScreen.dimColor(waypoint.colorRgb);
@@ -285,7 +284,7 @@ extends Screen {
         }
     }
 
-    private void renderSkullBeacons(DrawContext ctx) {
+    private void renderSkullBeacons(GuiGraphicsExtractor ctx) {
         for (MapConfig.Waypoint waypoint : this.config().waypoints) {
             if (!SkullsModule.isSkullWaypointId(waypoint.id)) continue;
             this.drawMarker(ctx, waypoint.x, waypoint.z, waypoint.colorRgb, 5, true, this.zoom >= 0.45 ? waypoint.label : null, this.isSameGuideTarget(this.targetFromWaypoint(waypoint)));
@@ -299,7 +298,7 @@ extends Screen {
         return r << 16 | g << 8 | b;
     }
 
-    private void drawWaypointEdgeMarker(DrawContext ctx, MapConfig.Waypoint waypoint) {
+    private void drawWaypointEdgeMarker(GuiGraphicsExtractor ctx, MapConfig.Waypoint waypoint) {
         boolean below;
         int x = this.screenX(ZombieZMapData.mapX(waypoint.x));
         int y = this.screenY(ZombieZMapData.mapY(waypoint.z));
@@ -317,14 +316,14 @@ extends Screen {
         this.drawMarkerShape(ctx, edgeX, edgeY, radius, true, selected ? -8874241 : color);
         ctx.fill(edgeX - 1, edgeY - 1, edgeX + 2, edgeY + 2, -1);
         if (this.zoom >= 0.45 || selected) {
-            String label = this.textRenderer.trimToWidth(waypoint.label == null ? "Rep\u00e8re" : waypoint.label, 96);
-            int labelX = (int)ZombieZMapScreen.clamp(edgeX + 8, this.viewportLeft() + 4, this.viewportRight() - this.textRenderer.getWidth(label) - 4);
+            String label = this.font.plainSubstrByWidth(waypoint.label == null ? "Rep\u00e8re" : waypoint.label, 96);
+            int labelX = (int)ZombieZMapScreen.clamp(edgeX + 8, this.viewportLeft() + 4, this.viewportRight() - this.font.width(label) - 4);
             int labelY = above ? edgeY + 8 : edgeY - 16;
-            ctx.drawTextWithShadow(this.textRenderer, label, labelX, labelY, selected ? -8874241 : -1);
+            ctx.text(this.font, label, labelX, labelY, selected ? -8874241 : -1);
         }
     }
 
-    private void drawMarker(DrawContext ctx, double worldX, double worldZ, int rgb, int radius, boolean diamond, String label, boolean selected) {
+    private void drawMarker(GuiGraphicsExtractor ctx, double worldX, double worldZ, int rgb, int radius, boolean diamond, String label, boolean selected) {
         double mapX = ZombieZMapData.mapX(worldX);
         double mapY = ZombieZMapData.mapY(worldZ);
         int x = this.screenX(mapX);
@@ -345,7 +344,7 @@ extends Screen {
         this.drawMarkerShape(ctx, x, y, r, diamond, color);
         ctx.fill(x - 1, y - 1, x + 2, y + 2, selected ? -8874241 : -1);
         if (label != null && !label.isBlank()) {
-            ctx.drawTextWithShadow(this.textRenderer, label, x + r + 4, y - 4, selected ? -8874241 : -1);
+            ctx.text(this.font, label, x + r + 4, y - 4, selected ? -8874241 : -1);
         }
     }
 
@@ -354,7 +353,7 @@ extends Screen {
         return (int)Math.round((Math.sin(phase) + 1.0) * 1.5);
     }
 
-    private void drawMarkerShape(DrawContext ctx, int x, int y, int r, boolean diamond, int color) {
+    private void drawMarkerShape(GuiGraphicsExtractor ctx, int x, int y, int r, boolean diamond, int color) {
         if (diamond) {
             ctx.fill(x - 1, y - r, x + 2, y + r + 1, color);
             ctx.fill(x - r, y - 1, x + r + 1, y + 2, color);
@@ -363,8 +362,8 @@ extends Screen {
         }
     }
 
-    private void renderPlayerMarker(DrawContext ctx) {
-        MinecraftClient client = MinecraftClient.getInstance();
+    private void renderPlayerMarker(GuiGraphicsExtractor ctx) {
+        Minecraft client = Minecraft.getInstance();
         if (client.player == null) {
             return;
         }
@@ -373,7 +372,7 @@ extends Screen {
         ZombieZMapScreen.drawPlayerDot(ctx, x, y, 0.78f);
     }
 
-    private void renderPresences(DrawContext ctx) {
+    private void renderPresences(GuiGraphicsExtractor ctx) {
         if (!this.config().showModUsers) {
             return;
         }
@@ -391,29 +390,29 @@ extends Screen {
             ctx.fill(x - 1, y - 1, x + 2, y + 2, -1);
             int textY = y - 4;
             if (pcfg.showNames && this.zoom >= 0.55) {
-                ctx.drawTextWithShadow(this.textRenderer, (Text)Text.literal((String)p.name()), x + 6, textY, -3149825);
+                ctx.text(this.font, (Component)Component.literal((String)p.name()), x + 6, textY, -3149825);
                 textY += 10;
             }
             if (!pcfg.showCoords || !(this.zoom >= 0.55)) continue;
             String coords = "x " + (int)Math.round(p.x()) + "  z " + (int)Math.round(p.z());
-            ctx.drawTextWithShadow(this.textRenderer, (Text)Text.literal((String)coords), x + 6, textY, -6699044);
+            ctx.text(this.font, (Component)Component.literal((String)coords), x + 6, textY, -6699044);
         }
     }
 
-    static void drawPlayerDot(DrawContext ctx, int x, int y, float scale) {
-        ctx.getMatrices().push();
-        ctx.getMatrices().translate((float)x, (float)y, 0.0f);
-        ctx.getMatrices().scale(scale, scale, 1.0f);
+    static void drawPlayerDot(GuiGraphicsExtractor ctx, int x, int y, float scale) {
+        ctx.pose().pushMatrix();
+        ctx.pose().translate((float)x, (float)y);
+        ctx.pose().scale(scale, scale);
         ctx.fill(-5, -5, 6, 6, -587202560);
         ctx.fill(-4, -1, 5, 2, -8874241);
         ctx.fill(-1, -4, 2, 5, -8874241);
         ctx.fill(-3, -3, 4, 4, -1);
         ctx.fill(-2, -2, 3, 3, -8874241);
         ctx.fill(-1, -1, 2, 2, -15658216);
-        ctx.getMatrices().pop();
+        ctx.pose().popMatrix();
     }
 
-    private void renderBackdrop(DrawContext ctx) {
+    private void renderBackdrop(GuiGraphicsExtractor ctx) {
         int mapLeft = (int)Math.max((double)this.viewportLeft(), Math.floor(this.mapLeft()));
         int mapTop = (int)Math.max((double)this.viewportTop(), Math.floor(this.mapTop()));
         int mapRight = (int)Math.min((double)this.viewportRight(), Math.ceil(this.mapRight()));
@@ -421,42 +420,42 @@ extends Screen {
         ctx.fill(mapLeft + 3, mapTop + 4, mapRight + 3, mapBottom + 4, -1442840576);
         ctx.fill(mapLeft - 3, mapTop - 3, mapRight + 3, mapBottom + 3, -2012739054);
         ctx.fill(mapLeft - 3, mapTop - 3, mapRight + 3, mapTop - 1, -8874241);
-        ctx.drawBorder(mapLeft - 3, mapTop - 3, mapRight - mapLeft + 6, mapBottom - mapTop + 6, -8874241);
+        ctx.outline(mapLeft - 3, mapTop - 3, mapRight - mapLeft + 6, mapBottom - mapTop + 6, -8874241);
     }
 
-    private void renderChrome(DrawContext ctx, int mouseX, int mouseY) {
+    private void renderChrome(GuiGraphicsExtractor ctx, int mouseX, int mouseY) {
         int mapX = (int)Math.floor(ZombieZMapScreen.clamp(this.screenToMapX(mouseX), 0.0, 1242.0));
         int mapZ = (int)Math.floor(ZombieZMapScreen.clamp(ZombieZMapData.worldZ(this.screenToMapY(mouseY)), 0.0, 10400.0));
-        MutableText status = Text.translatable((String)"zombiezcompanion.map.status", (Object[])new Object[]{mapX, mapZ, Math.round(this.zoom * 100.0)});
-        int statusWidth = this.textRenderer.getWidth((StringVisitable)status);
+        MutableComponent status = Component.translatable((String)"zombiezcompanion.map.status", (Object[])new Object[]{mapX, mapZ, Math.round(this.zoom * 100.0)});
+        int statusWidth = this.font.width((FormattedText)status);
         int statusX = Math.max(8, this.width - statusWidth - 18);
         ctx.fill(8, 8, 132, 30, -183627755);
-        ctx.drawBorder(8, 8, 124, 22, -13880766);
-        ctx.drawTextWithShadow(this.textRenderer, (Text)Text.translatable((String)"zombiezcompanion.map.title"), 16, 14, -854792);
+        ctx.outline(8, 8, 124, 22, -13880766);
+        ctx.text(this.font, (Component)Component.translatable((String)"zombiezcompanion.map.title"), 16, 14, -854792);
         ctx.fill(statusX - 8, 8, this.width - 8, 30, -183627755);
-        ctx.drawBorder(statusX - 8, 8, this.width - statusX, 22, -13880766);
-        ctx.drawTextWithShadow(this.textRenderer, (Text)status, statusX, 14, -854792);
+        ctx.outline(statusX - 8, 8, this.width - statusX, 22, -13880766);
+        ctx.text(this.font, (Component)status, statusX, 14, -854792);
         if (!this.searchText.isBlank()) {
             int badgeY = 60;
             if (this.searchMatch != null) {
-                String preview = this.textRenderer.trimToWidth("> " + this.searchMatch.label(), 120);
-                ctx.drawText(this.textRenderer, preview, 10, badgeY, -8874241, false);
+                String preview = this.font.plainSubstrByWidth("> " + this.searchMatch.label(), 120);
+                ctx.text(this.font, preview, 10, badgeY, -8874241, false);
             } else {
-                ctx.drawText(this.textRenderer, (Text)Text.translatable((String)"zombiezcompanion.map.search.no_match"), 10, badgeY, -8353376, false);
+                ctx.text(this.font, (Component)Component.translatable((String)"zombiezcompanion.map.search.no_match"), 10, badgeY, -8353376, false);
             }
         }
         MapConfig cfg = this.config();
         int y = 72;
-        this.drawLayerButton(ctx, y, (Text)Text.translatable((String)"zombiezcompanion.map.layer.zones"), cfg.showZones);
-        this.drawLayerButton(ctx, y += 25, (Text)Text.translatable((String)"zombiezcompanion.map.layer.refuges"), cfg.showRefuges);
-        this.drawLayerButton(ctx, y += 25, (Text)Text.translatable((String)"zombiezcompanion.map.layer.cranes"), cfg.showCranes);
-        this.drawLayerButton(ctx, y += 25, (Text)Text.translatable((String)"zombiezcompanion.map.layer.bosses"), cfg.showBosses);
-        this.drawLayerButton(ctx, y += 25, (Text)Text.translatable((String)"zombiezcompanion.map.layer.waypoints"), cfg.showWaypoints);
-        this.drawLayerButton(ctx, y += 25, (Text)Text.translatable((String)"zombiezcompanion.map.layer.mod_users"), cfg.showModUsers);
+        this.drawLayerButton(ctx, y, (Component)Component.translatable((String)"zombiezcompanion.map.layer.zones"), cfg.showZones);
+        this.drawLayerButton(ctx, y += 25, (Component)Component.translatable((String)"zombiezcompanion.map.layer.refuges"), cfg.showRefuges);
+        this.drawLayerButton(ctx, y += 25, (Component)Component.translatable((String)"zombiezcompanion.map.layer.cranes"), cfg.showCranes);
+        this.drawLayerButton(ctx, y += 25, (Component)Component.translatable((String)"zombiezcompanion.map.layer.bosses"), cfg.showBosses);
+        this.drawLayerButton(ctx, y += 25, (Component)Component.translatable((String)"zombiezcompanion.map.layer.waypoints"), cfg.showWaypoints);
+        this.drawLayerButton(ctx, y += 25, (Component)Component.translatable((String)"zombiezcompanion.map.layer.mod_users"), cfg.showModUsers);
         this.renderActiveGuidePanel(ctx, y + 20 + 10);
     }
 
-    private void renderActiveGuidePanel(DrawContext ctx, int y) {
+    private void renderActiveGuidePanel(GuiGraphicsExtractor ctx, int y) {
         MapConfig.GuideTarget target = this.config().guideTarget;
         if (target == null) {
             return;
@@ -464,64 +463,64 @@ extends Screen {
         int h = 44;
         ctx.fill(8, y, 132, y + h, -586544110);
         ctx.fill(8, y, 132, y + 2, -8874241);
-        ctx.drawBorder(8, y, 124, h, -8874241);
-        ctx.drawText(this.textRenderer, (Text)Text.translatable((String)"zombiezcompanion.map.guide.active"), 16, y + 7, -8874241, false);
-        String label = this.textRenderer.trimToWidth(target.label, 108);
-        ctx.drawTextWithShadow(this.textRenderer, label, 16, y + 20, -854792);
-        String hint = this.textRenderer.trimToWidth(Text.translatable((String)"zombiezcompanion.map.guide.click_again").getString(), 108);
-        ctx.drawText(this.textRenderer, hint, 16, y + 32, -8353376, false);
+        ctx.outline(8, y, 124, h, -8874241);
+        ctx.text(this.font, (Component)Component.translatable((String)"zombiezcompanion.map.guide.active"), 16, y + 7, -8874241, false);
+        String label = this.font.plainSubstrByWidth(target.label, 108);
+        ctx.text(this.font, label, 16, y + 20, -854792);
+        String hint = this.font.plainSubstrByWidth(Component.translatable((String)"zombiezcompanion.map.guide.click_again").getString(), 108);
+        ctx.text(this.font, hint, 16, y + 32, -8353376, false);
     }
 
-    private void drawLayerButton(DrawContext ctx, int y, Text label, boolean enabled) {
+    private void drawLayerButton(GuiGraphicsExtractor ctx, int y, Component label, boolean enabled) {
         int bg = enabled ? -14867392 : -266723542;
         int border = enabled ? -8874241 : -14736594;
         ctx.fill(8, y, 132, y + 20, bg);
-        ctx.drawBorder(8, y, 124, 20, border);
-        ctx.drawText(this.textRenderer, label, 16, y + 6, enabled ? -854792 : -8353376, false);
-        MutableText state = Text.translatable((String)(enabled ? "zombiezcompanion.state.on" : "zombiezcompanion.state.off"));
-        int stateW = this.textRenderer.getWidth((StringVisitable)state);
-        ctx.drawText(this.textRenderer, (Text)state, 132 - stateW - 8, y + 6, enabled ? -8874241 : -12235684, false);
+        ctx.outline(8, y, 124, 20, border);
+        ctx.text(this.font, label, 16, y + 6, enabled ? -854792 : -8353376, false);
+        MutableComponent state = Component.translatable((String)(enabled ? "zombiezcompanion.state.on" : "zombiezcompanion.state.off"));
+        int stateW = this.font.width((FormattedText)state);
+        ctx.text(this.font, (Component)state, 132 - stateW - 8, y + 6, enabled ? -8874241 : -12235684, false);
     }
 
-    private void renderHoverInfo(DrawContext ctx, int mouseX, int mouseY) {
+    private void renderHoverInfo(GuiGraphicsExtractor ctx, int mouseX, int mouseY) {
         if (!this.isInsideMap(mouseX, mouseY)) {
             return;
         }
         MapConfig.Waypoint waypoint = this.findNearestWaypointAtScreen(mouseX, mouseY);
         if (waypoint != null) {
             String actionKey = waypoint.visible ? "zombiezcompanion.map.tooltip.action.hide" : "zombiezcompanion.map.tooltip.action.show";
-            this.renderTooltipBox(ctx, mouseX, mouseY, waypoint.label, Text.translatable((String)"zombiezcompanion.coord.xz", (Object[])new Object[]{(int)Math.round(waypoint.x), (int)Math.round(waypoint.z)}).getString(), Text.translatable((String)actionKey).getString(), Text.translatable((String)"zombiezcompanion.map.tooltip.action.middle_delete").getString());
+            this.renderTooltipBox(ctx, mouseX, mouseY, waypoint.label, Component.translatable((String)"zombiezcompanion.coord.xz", (Object[])new Object[]{(int)Math.round(waypoint.x), (int)Math.round(waypoint.z)}).getString(), Component.translatable((String)actionKey).getString(), Component.translatable((String)"zombiezcompanion.map.tooltip.action.middle_delete").getString());
             return;
         }
         ZombieZMapData.Boss boss = this.findNearestBossAtScreen(mouseX, mouseY);
         if (boss != null) {
             MapGuideTarget target = this.targetFromBoss(boss);
-            this.renderTooltipBox(ctx, mouseX, mouseY, boss.name(), Text.translatable((String)"zombiezcompanion.map.tooltip.boss_zone", (Object[])new Object[]{boss.zone()}).getString(), Text.translatable((String)"zombiezcompanion.coord.xyz", (Object[])new Object[]{(int)Math.round(boss.x()), (int)Math.round(boss.y()), (int)Math.round(boss.z())}).getString(), boss.respawn().isBlank() ? "" : Text.translatable((String)"zombiezcompanion.map.tooltip.boss_respawn", (Object[])new Object[]{boss.respawn()}).getString(), this.guideActionLabel(target));
+            this.renderTooltipBox(ctx, mouseX, mouseY, boss.name(), Component.translatable((String)"zombiezcompanion.map.tooltip.boss_zone", (Object[])new Object[]{boss.zone()}).getString(), Component.translatable((String)"zombiezcompanion.coord.xyz", (Object[])new Object[]{(int)Math.round(boss.x()), (int)Math.round(boss.y()), (int)Math.round(boss.z())}).getString(), boss.respawn().isBlank() ? "" : Component.translatable((String)"zombiezcompanion.map.tooltip.boss_respawn", (Object[])new Object[]{boss.respawn()}).getString(), this.guideActionLabel(target));
             return;
         }
         SkullHit skull = this.findNearestSkullAtScreen(mouseX, mouseY);
         if (skull != null) {
             MapGuideTarget target = this.targetFromSkull(skull);
-            this.renderTooltipBox(ctx, mouseX, mouseY, skull.point.label(), Text.translatable((String)"zombiezcompanion.map.tooltip.skull_zone", (Object[])new Object[]{skull.zone.num(), skull.zone.name()}).getString(), Text.translatable((String)"zombiezcompanion.coord.xyz", (Object[])new Object[]{(int)Math.round(skull.point.x()), (int)Math.round(skull.point.y()), (int)Math.round(skull.point.z())}).getString(), this.guideActionLabel(target));
+            this.renderTooltipBox(ctx, mouseX, mouseY, skull.point.label(), Component.translatable((String)"zombiezcompanion.map.tooltip.skull_zone", (Object[])new Object[]{skull.zone.num(), skull.zone.name()}).getString(), Component.translatable((String)"zombiezcompanion.coord.xyz", (Object[])new Object[]{(int)Math.round(skull.point.x()), (int)Math.round(skull.point.y()), (int)Math.round(skull.point.z())}).getString(), this.guideActionLabel(target));
             return;
         }
-        MinecraftClient mc = MinecraftClient.getInstance();
+        Minecraft mc = Minecraft.getInstance();
         if (mc.player != null && this.isHoveringPlayer(mouseX, mouseY)) {
-            this.renderTooltipBox(ctx, mouseX, mouseY, Text.translatable((String)"zombiezcompanion.map.tooltip.player").getString(), Text.translatable((String)"zombiezcompanion.coord.xyz", (Object[])new Object[]{(int)Math.round(mc.player.getX()), (int)Math.round(mc.player.getY()), (int)Math.round(mc.player.getZ())}).getString(), Text.translatable((String)"zombiezcompanion.map.tooltip.player_yaw", (Object[])new Object[]{Math.round(mc.player.getYaw())}).getString());
+            this.renderTooltipBox(ctx, mouseX, mouseY, Component.translatable((String)"zombiezcompanion.map.tooltip.player").getString(), Component.translatable((String)"zombiezcompanion.coord.xyz", (Object[])new Object[]{(int)Math.round(mc.player.getX()), (int)Math.round(mc.player.getY()), (int)Math.round(mc.player.getZ())}).getString(), Component.translatable((String)"zombiezcompanion.map.tooltip.player_yaw", (Object[])new Object[]{Math.round(mc.player.getYRot())}).getString());
             return;
         }
         ZombieZMapData.Zone zone = this.findHoveredZoneLine(mouseY);
         if (zone != null) {
-            this.renderTooltipBox(ctx, mouseX, mouseY, Text.translatable((String)"zombiezcompanion.map.tooltip.zone_title", (Object[])new Object[]{zone.num()}).getString(), zone.name(), Text.translatable((String)"zombiezcompanion.map.tooltip.zone_range", (Object[])new Object[]{zone.zMin(), zone.zMax()}).getString());
+            this.renderTooltipBox(ctx, mouseX, mouseY, Component.translatable((String)"zombiezcompanion.map.tooltip.zone_title", (Object[])new Object[]{zone.num()}).getString(), zone.name(), Component.translatable((String)"zombiezcompanion.map.tooltip.zone_range", (Object[])new Object[]{zone.zMin(), zone.zMax()}).getString());
         }
     }
 
-    private void renderTooltipBox(DrawContext ctx, int mouseX, int mouseY, String title, String ... lines) {
-        int textWidth = this.textRenderer.getWidth(title);
+    private void renderTooltipBox(GuiGraphicsExtractor ctx, int mouseX, int mouseY, String title, String ... lines) {
+        int textWidth = this.font.width(title);
         int visibleLines = 0;
         for (String line : lines) {
             if (line == null || line.isBlank()) continue;
-            textWidth = Math.max(textWidth, this.textRenderer.getWidth(line));
+            textWidth = Math.max(textWidth, this.font.width(line));
             ++visibleLines;
         }
         int w = textWidth + 14;
@@ -531,19 +530,20 @@ extends Screen {
         ctx.fill(x + 2, y + 2, x + w + 2, y + h + 2, -1442840576);
         ctx.fill(x, y, x + w, y + h, -183627755);
         ctx.fill(x, y, x + w, y + 2, -8874241);
-        ctx.drawBorder(x, y, w, h, -8874241);
-        ctx.drawTextWithShadow(this.textRenderer, title, x + 7, y + 6, -854792);
+        ctx.outline(x, y, w, h, -8874241);
+        ctx.text(this.font, title, x + 7, y + 6, -854792);
         int lineY = y + 18;
         int index = 0;
         for (String line : lines) {
             if (line == null || line.isBlank()) continue;
-            ctx.drawText(this.textRenderer, line, x + 7, lineY, index == 0 ? -854792 : -8353376, false);
+            ctx.text(this.font, line, x + 7, lineY, index == 0 ? -854792 : -8353376, false);
             lineY += 12;
             ++index;
         }
     }
 
-    public boolean mouseClicked(double mouseX, double mouseY, int button) {
+    public boolean mouseClicked(net.minecraft.client.input.MouseButtonEvent event, boolean doubleClick) {
+        double mouseX = event.x(), mouseY = event.y(); int button = event.button();
         if (button == 0 && this.config().guideTarget != null && this.isOverActiveGuidePanel(mouseX, mouseY)) {
             this.clearGuideTarget();
             return true;
@@ -551,7 +551,7 @@ extends Screen {
         if (button == 0 && this.handleLayerButtonClick(mouseX, mouseY)) {
             return true;
         }
-        if (button == 0 && this.isInsideMap(mouseX, mouseY) && this.client != null) {
+        if (button == 0 && this.isInsideMap(mouseX, mouseY) && this.minecraft != null) {
             this.waypointClickCandidate = true;
             this.waypointClickDragged = false;
             this.waypointClickStartX = mouseX;
@@ -560,12 +560,12 @@ extends Screen {
         }
         if (button == 2 && this.isInsideMap(mouseX, mouseY)) {
             MapConfig.Waypoint waypoint = this.findNearestWaypointAtScreen(mouseX, mouseY);
-            if (waypoint != null && this.client != null) {
-                this.client.setScreen((Screen)new WaypointDeleteConfirmScreen(this, this.configManager, waypoint.id));
+            if (waypoint != null && this.minecraft != null) {
+                this.minecraft.setScreen((Screen)new WaypointDeleteConfirmScreen(this, this.configManager, waypoint.id));
             }
             return true;
         }
-        return super.mouseClicked(mouseX, mouseY, button);
+        return super.mouseClicked(event, doubleClick);
     }
 
     private boolean handleLayerButtonClick(double mouseX, double mouseY) {
@@ -619,13 +619,14 @@ extends Screen {
         return mouseX >= 8.0 && mouseX <= 132.0 && mouseY >= (double)panelY && mouseY <= (double)(panelY + 44);
     }
 
-    public boolean mouseReleased(double mouseX, double mouseY, int button) {
+    public boolean mouseReleased(net.minecraft.client.input.MouseButtonEvent event) {
+        double mouseX = event.x(), mouseY = event.y(); int button = event.button();
         if (button == 0 && this.waypointClickCandidate) {
             double dragDistance = Math.hypot(mouseX - this.waypointClickStartX, mouseY - this.waypointClickStartY);
             boolean isClick = !this.waypointClickDragged && dragDistance <= 4.0;
             this.waypointClickCandidate = false;
             this.waypointClickDragged = false;
-            if (isClick && this.isInsideMap(mouseX, mouseY) && this.client != null) {
+            if (isClick && this.isInsideMap(mouseX, mouseY) && this.minecraft != null) {
                 double mapX = ZombieZMapScreen.clamp(this.screenToMapX(mouseX), 0.0, 1242.0);
                 double worldZ = ZombieZMapData.worldZ(ZombieZMapScreen.clamp(this.screenToMapY(mouseY), 0.0, 10432.0));
                 MapConfig.Waypoint waypoint = this.findNearestWaypointAtScreen(mouseX, mouseY);
@@ -637,13 +638,13 @@ extends Screen {
                     if (target != null) {
                         this.selectGuideTarget(target);
                     } else if (WaypointsModule.isEnabled()) {
-                        this.client.setScreen((Screen)new WaypointEditScreen(this, this.configManager, mapX, worldZ));
+                        this.minecraft.setScreen((Screen)new WaypointEditScreen(this, this.configManager, mapX, worldZ));
                     }
                 }
             }
             return true;
         }
-        return super.mouseReleased(mouseX, mouseY, button);
+        return super.mouseReleased(event);
     }
 
     private MapConfig.Waypoint findNearestWaypointAtScreen(double mouseX, double mouseY) {
@@ -710,7 +711,7 @@ extends Screen {
     }
 
     private String guideActionLabel(MapGuideTarget target) {
-        return Text.translatable((String)(this.isSameGuideTarget(target) ? "zombiezcompanion.map.tooltip.action.unguide" : "zombiezcompanion.map.tooltip.action.guide")).getString();
+        return Component.translatable((String)(this.isSameGuideTarget(target) ? "zombiezcompanion.map.tooltip.action.unguide" : "zombiezcompanion.map.tooltip.action.guide")).getString();
     }
 
     private boolean isSameGuideTarget(MapGuideTarget target) {
@@ -770,7 +771,7 @@ extends Screen {
 
     private boolean isHoveringPlayer(double mouseX, double mouseY) {
         int playerY;
-        MinecraftClient mc = MinecraftClient.getInstance();
+        Minecraft mc = Minecraft.getInstance();
         if (mc.player == null) {
             return false;
         }
@@ -779,7 +780,7 @@ extends Screen {
     }
 
     private void centerOnPlayerOrSpawn() {
-        MinecraftClient client = MinecraftClient.getInstance();
+        Minecraft client = Minecraft.getInstance();
         if (client.player != null) {
             this.centerOn(ZombieZMapData.mapX(client.player.getX()), ZombieZMapData.mapY(client.player.getZ()));
         } else {
@@ -793,9 +794,10 @@ extends Screen {
         this.clampView();
     }
 
-    public boolean mouseDragged(double mouseX, double mouseY, int button, double deltaX, double deltaY) {
+    public boolean mouseDragged(net.minecraft.client.input.MouseButtonEvent event, double deltaX, double deltaY) {
+        double mouseX = event.x(), mouseY = event.y(); int button = event.button();
         if (button != 0) {
-            return super.mouseDragged(mouseX, mouseY, button, deltaX, deltaY);
+            return super.mouseDragged(event, deltaX, deltaY);
         }
         if (this.waypointClickCandidate && Math.hypot(mouseX - this.waypointClickStartX, mouseY - this.waypointClickStartY) > 4.0) {
             this.waypointClickDragged = true;
@@ -826,21 +828,22 @@ extends Screen {
         return true;
     }
 
-    public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
+    public boolean keyPressed(net.minecraft.client.input.KeyEvent event) {
+        int keyCode = event.key(), scanCode = event.scancode(), modifiers = event.modifiers();
         if (this.searchField != null && this.searchField.isFocused()) {
             if (keyCode == 257 || keyCode == 335) {
                 this.jumpToSearchMatch();
                 return true;
             }
             if (keyCode == 256) {
-                this.searchField.setText("");
+                this.searchField.setValue("");
                 this.searchField.setFocused(false);
                 return true;
             }
-            return super.keyPressed(keyCode, scanCode, modifiers);
+            return super.keyPressed(event);
         }
         if (keyCode == 77 || keyCode == 256) {
-            this.close();
+            this.onClose();
             return true;
         }
         if (keyCode == 67) {
@@ -859,7 +862,7 @@ extends Screen {
             this.zoomAroundCenter(0.8474576271186441);
             return true;
         }
-        return super.keyPressed(keyCode, scanCode, modifiers);
+        return super.keyPressed(event);
     }
 
     private boolean toggle(Runnable action) {
@@ -875,7 +878,7 @@ extends Screen {
         }
     }
 
-    public boolean shouldPause() {
+    public boolean isPauseScreen() {
         return false;
     }
 

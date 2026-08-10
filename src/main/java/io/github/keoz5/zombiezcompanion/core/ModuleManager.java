@@ -12,9 +12,9 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import net.minecraft.text.Text;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.gui.DrawContext;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.network.chat.Component;
 
 public final class ModuleManager {
     private final ConfigManager configManager;
@@ -101,7 +101,7 @@ public final class ModuleManager {
         }
     }
 
-    public void onClientTick(MinecraftClient client) {
+    public void onClientTick(Minecraft client) {
         for (Module m : this.modules) {
             if (!this.isEnabled(m.id())) continue;
             try {
@@ -113,7 +113,7 @@ public final class ModuleManager {
         }
     }
 
-    public void onChatMessage(Text message, boolean overlay) {
+    public void onChatMessage(Component message, boolean overlay) {
         for (Module m : this.modules) {
             if (!this.isEnabled(m.id())) continue;
             try {
@@ -125,7 +125,7 @@ public final class ModuleManager {
         }
     }
 
-    public void onHudRender(DrawContext drawContext, float tickDelta) {
+    public void onHudRender(GuiGraphicsExtractor drawContext, float tickDelta) {
         for (Module m : this.modules) {
             if (!this.isEnabled(m.id())) continue;
             try {

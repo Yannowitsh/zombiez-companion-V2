@@ -1,6 +1,8 @@
 package io.github.keoz5.zombiezcompanion.modules.dropalert;
 
 import com.mojang.blaze3d.systems.RenderSystem;
+import com.mojang.blaze3d.vertex.PoseStack;
+import com.mojang.math.Axis;
 import io.github.keoz5.zombiezcompanion.ZombieZCompanionClient;
 import io.github.keoz5.zombiezcompanion.config.ConfigManager;
 import io.github.keoz5.zombiezcompanion.config.DropAlertConfig;
@@ -24,27 +26,25 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
-import net.fabricmc.fabric.api.client.rendering.v1.WorldRenderContext;
-import net.fabricmc.fabric.api.client.rendering.v1.WorldRenderEvents;
-import net.minecraft.client.sound.PositionedSoundInstance;
-import net.minecraft.client.sound.SoundInstance;
-import net.minecraft.entity.Entity;
-import net.minecraft.entity.ItemEntity;
-import net.minecraft.item.ItemStack;
-import net.minecraft.util.math.Vec3d;
-import net.minecraft.text.Text;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.font.TextRenderer;
-import net.minecraft.client.gui.DrawContext;
-import net.minecraft.sound.SoundEvent;
-import net.minecraft.sound.SoundEvents;
-import net.minecraft.client.render.Camera;
-import net.minecraft.client.gui.screen.Screen;
-import net.minecraft.client.util.math.MatrixStack;
-import net.minecraft.client.render.VertexConsumerProvider;
-import net.minecraft.text.MutableText;
-import net.minecraft.text.StringVisitable;
-import net.minecraft.util.math.RotationAxis;
+import net.fabricmc.fabric.api.client.rendering.v1.level.LevelRenderContext;
+import net.fabricmc.fabric.api.client.rendering.v1.level.LevelRenderEvents;
+import net.minecraft.client.Camera;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.Font;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.renderer.MultiBufferSource;
+import net.minecraft.client.resources.sounds.SimpleSoundInstance;
+import net.minecraft.client.resources.sounds.SoundInstance;
+import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.FormattedText;
+import net.minecraft.network.chat.MutableComponent;
+import net.minecraft.sounds.SoundEvent;
+import net.minecraft.sounds.SoundEvents;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.item.ItemEntity;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.phys.Vec3;
 
 public final class DropAlertModule
 implements Module {
@@ -76,7 +76,7 @@ implements Module {
 
     @Override
     public String description() {
-        return Text.translatable((String)"zombiezcompanion.module.drop_alert.desc").getString();
+        return Component.translatable((String)"zombiezcompanion.module.drop_alert.desc").getString();
     }
 
     @Override
@@ -102,12 +102,12 @@ implements Module {
     @Override
     public void onRegister(ModuleContext ctx) {
         this.configManager = ctx.configManager();
-        WorldRenderEvents.LAST.register(this::renderBeacon);
+        LevelRenderEvents.AFTER_TRANSLUCENT_TERRAIN.register(this::renderBeacon);
     }
 
-    private void renderBeacon(WorldRenderContext ctx) {
-        MinecraftClient mc = MinecraftClient.getInstance();
-        if (mc.player == null || mc.world == null || this.activeDrops.isEmpty()) {
+    private void renderBeacon(LevelRenderContext ctx) {
+        Minecraft mc = Minecraft.getInstance();
+        if (mc.player == null || mc.level == null || this.activeDrops.isEmpty()) {
             return;
         }
         if (!ZombieZDetector.isOnZombieZ()) {
@@ -119,27 +119,22 @@ implements Module {
         if (!ZombieZCompanionClient.moduleManager().isEnabled(ID)) {
             return;
         }
-        Camera camera = ctx.camera();
-        Vec3d cam = camera.getPos();
-        MatrixStack matrices = ctx.matrixStack();
-        VertexConsumerProvider.Immediate immediate = mc.getBufferBuilders().getEntityVertexConsumers();
+        Camera camera = mc.gameRenderer.getMainCamera();
+        Vec3 cam = camera.position();
+        PoseStack matrices = ctx.poseStack();
+        MultiBufferSource.BufferSource immediate = mc.renderBuffers().bufferSource();
         boolean drewAny = false;
-        matrices.push();
+        matrices.pushPose();
         for (ActiveDrop drop : this.activeDrops.values()) {
-            if (!WaypointsModule.isBeaconVisible(ctx.frustum(), drop.x, drop.y, drop.z)) continue;
             int color = 0xFF000000 | drop.rarity.colorRgb;
-            WaypointsModule.drawBeacon(matrices, immediate, camera, cam, mc.textRenderer, drop.x, drop.y, drop.z, drop.itemName, color);
+            WaypointsModule.drawBeacon(matrices, immediate, camera, cam, mc.font, drop.x, drop.y, drop.z, drop.itemName, color);
             drewAny = true;
         }
-        matrices.pop();
+        matrices.popPose();
         if (!drewAny) {
             return;
         }
-        RenderSystem.disableDepthTest();
-        RenderSystem.lineWidth((float)4.0f);
-        immediate.draw();
-        RenderSystem.lineWidth((float)1.0f);
-        RenderSystem.enableDepthTest();
+        immediate.endBatch();
     }
 
     @Override
@@ -158,9 +153,9 @@ implements Module {
     }
 
     @Override
-    public void onClientTick(MinecraftClient client) {
+    public void onClientTick(Minecraft client) {
         boolean dropPressed;
-        if (client.player == null || client.world == null || !ZombieZDetector.isOnZombieZ()) {
+        if (client.player == null || client.level == null || !ZombieZDetector.isOnZombieZ()) {
             this.reset();
             return;
         }
@@ -168,7 +163,7 @@ implements Module {
             this.reset();
             return;
         }
-        boolean bl = dropPressed = client.options != null && client.options.dropKey.isPressed();
+        boolean bl = dropPressed = client.options != null && client.options.keyDrop.isDown();
         if (dropPressed && !this.wasDropKeyPressed) {
             this.ticksSinceDropKey = 0;
         }
@@ -180,17 +175,17 @@ implements Module {
             return;
         }
         this.scanTick = 0;
-        List<ItemEntity> items = client.world.getEntitiesByClass(ItemEntity.class, client.player.getBoundingBox().expand(48.0), item -> !item.isRemoved() && !item.getStack().isEmpty());
+        List<ItemEntity> items = client.level.getEntitiesOfClass(ItemEntity.class, client.player.getBoundingBox().inflate(48.0), item -> !item.isRemoved() && !item.getItem().isEmpty());
         HashSet<UUID> present = new HashSet<UUID>();
-        UUID playerUuid = client.player.getUuid();
+        UUID playerUuid = client.player.getUUID();
         for (ItemEntity item2 : items) {
             double horiz;
-            UUID uuid2 = item2.getUuid();
-            ItemStack stack = item2.getStack();
+            UUID uuid2 = item2.getUUID();
+            ItemStack stack = item2.getItem();
             int count = stack.getCount();
             present.add(uuid2);
             this.updateActiveDropPosition(item2);
-            if (!this.selfDropIds.contains(uuid2) && !this.knownCounts.containsKey(uuid2) && this.ticksSinceDropKey < 60 && item2.getItemAge() < 10 && (horiz = Math.hypot(item2.getX() - client.player.getX(), item2.getZ() - client.player.getZ())) < 2.5 && Math.abs(item2.getY() - client.player.getY()) < 2.5) {
+            if (!this.selfDropIds.contains(uuid2) && !this.knownCounts.containsKey(uuid2) && this.ticksSinceDropKey < 60 && item2.getAge() < 10 && (horiz = Math.hypot(item2.getX() - client.player.getX(), item2.getZ() - client.player.getZ())) < 2.5 && Math.abs(item2.getY() - client.player.getY()) < 2.5) {
                 this.selfDropIds.add(uuid2);
             }
             if (this.selfDropIds.contains(uuid2) || DropAlertModule.isSelfDrop(item2, playerUuid)) {
@@ -199,7 +194,7 @@ implements Module {
             }
             Integer previousCount = this.knownCounts.put(uuid2, count);
             if (!this.initialized || previousCount == null && this.seedOnly(item2) || previousCount != null && count <= previousCount) continue;
-            String rawName = stack.getName().getString();
+            String rawName = stack.getHoverName().getString();
             boolean gadget = DropClassifier.isGadget(rawName);
             DropRarity foodRarity = DropClassifier.foodRarity(rawName);
             boolean food = foodRarity != null;
@@ -231,15 +226,15 @@ implements Module {
     }
 
     private void updateActiveDropPosition(ItemEntity item) {
-        ActiveDrop existing = this.activeDrops.get(item.getUuid());
+        ActiveDrop existing = this.activeDrops.get(item.getUUID());
         if (existing == null) {
             return;
         }
-        this.activeDrops.put(item.getUuid(), new ActiveDrop(existing.uuid, existing.rarity, existing.itemName, item.getX(), item.getY(), item.getZ()));
+        this.activeDrops.put(item.getUUID(), new ActiveDrop(existing.uuid, existing.rarity, existing.itemName, item.getX(), item.getY(), item.getZ()));
     }
 
     private boolean seedOnly(ItemEntity item) {
-        return item.getItemAge() > 8;
+        return item.getAge() > 8;
     }
 
     private static boolean isSelfDrop(ItemEntity item, UUID playerUuid) {
@@ -247,14 +242,14 @@ implements Module {
             return false;
         }
         Entity owner = item.getOwner();
-        return owner != null && playerUuid.equals(owner.getUuid());
+        return owner != null && playerUuid.equals(owner.getUUID());
     }
 
     @Override
-    public void onHudRender(DrawContext ctx, float tickDelta) {
+    public void onHudRender(GuiGraphicsExtractor ctx, float tickDelta) {
         boolean hasDrops;
-        MinecraftClient client = MinecraftClient.getInstance();
-        if (client.player == null || client.currentScreen != null) {
+        Minecraft client = Minecraft.getInstance();
+        if (client.player == null || client.screen != null) {
             return;
         }
         long now = System.currentTimeMillis();
@@ -263,20 +258,20 @@ implements Module {
         if (this.notifications.isEmpty() && !hasDrops) {
             return;
         }
-        TextRenderer tr = client.textRenderer;
+        Font tr = client.font;
         int boxW = 220;
         int totalH = Math.max(25, this.notifications.size() * 25 + (hasDrops && this.config().markerStyle == 1 ? 54 : 0));
         HudConfig hud = this.configManager.get().hud;
         double scale = HudAnchor.scale(hud, "drop_notifications");
         int scaledW = (int)Math.round((double)boxW * scale);
         int scaledH = (int)Math.round((double)totalH * scale);
-        int leftX = HudAnchor.resolveX(hud, "drop_notifications", ctx.getScaledWindowWidth(), scaledW, 0.0);
-        int startY = HudAnchor.resolveY(hud, "drop_notifications", ctx.getScaledWindowHeight(), scaledH, 0.5);
+        int leftX = HudAnchor.resolveX(hud, "drop_notifications", ctx.guiWidth(), scaledW, 0.0);
+        int startY = HudAnchor.resolveY(hud, "drop_notifications", ctx.guiHeight(), scaledH, 0.5);
         HudElements.report("drop_notifications", leftX, startY, scaledW, scaledH);
-        ctx.getMatrices().push();
-        ctx.getMatrices().translate((float)leftX, (float)startY, 0.0f);
+        ctx.pose().pushMatrix();
+        ctx.pose().translate((float)leftX, (float)startY);
         if (scale != 1.0) {
-            ctx.getMatrices().scale((float)scale, (float)scale, 1.0f);
+            ctx.pose().scale((float)scale, (float)scale);
         }
         int index = 0;
         for (DropNotification notification2 : this.notifications) {
@@ -291,7 +286,7 @@ implements Module {
             }
             this.renderDropGuide(ctx, tr, client, latest, 0, index * 25 + 6);
         }
-        ctx.getMatrices().pop();
+        ctx.pose().popMatrix();
         if (hasDrops && this.config().markerStyle == 0) {
             for (ActiveDrop drop : this.activeDrops.values()) {
                 WaypointsModule.renderScreenBeacon(ctx, client, tickDelta, drop.x, drop.y, drop.z, drop.itemName, 0xFF000000 | drop.rarity.colorRgb);
@@ -299,27 +294,27 @@ implements Module {
         }
     }
 
-    private void renderNotification(DrawContext ctx, TextRenderer tr, DropNotification notification, int x, int y, long now) {
-        MutableText rarity = Text.translatable((String)("zombiezcompanion.drop_alert.rarity." + notification.rarity.key));
-        MutableText message = Text.translatable((String)"zombiezcompanion.drop_alert.toast", (Object[])new Object[]{rarity, notification.itemName, (int)Math.round(notification.distance)});
-        int w = Math.min(288, Math.max(170, tr.getWidth((StringVisitable)message) + 34));
+    private void renderNotification(GuiGraphicsExtractor ctx, Font tr, DropNotification notification, int x, int y, long now) {
+        MutableComponent rarity = Component.translatable((String)("zombiezcompanion.drop_alert.rarity." + notification.rarity.key));
+        MutableComponent message = Component.translatable((String)"zombiezcompanion.drop_alert.toast", (Object[])new Object[]{rarity, notification.itemName, (int)Math.round(notification.distance)});
+        int w = Math.min(288, Math.max(170, tr.width((FormattedText)message) + 34));
         int color = 0xFF000000 | notification.rarity.colorRgb;
         float remaining = Math.max(0.0f, Math.min(1.0f, (float)(notification.expiresAt - now) / 1600.0f));
         int alpha = 208 + (int)(32.0f * remaining);
         ctx.fill(x + 2, y + 2, x + w + 2, y + 22, -1442840576);
         ctx.fill(x, y, x + w, y + 20, alpha << 24 | 0xA0C12);
         ctx.fill(x, y, x + 4, y + 20, color);
-        ctx.drawBorder(x, y, w, 20, color);
-        ctx.drawTextWithShadow(tr, tr.trimToWidth(message.getString(), w - 16), x + 10, y + 6, -1);
+        ctx.outline(x, y, w, 20, color);
+        ctx.text(tr, tr.plainSubstrByWidth(message.getString(), w - 16), x + 10, y + 6, -1);
     }
 
-    private void renderDropGuide(DrawContext ctx, TextRenderer tr, MinecraftClient client, ActiveDrop drop, int x, int y) {
+    private void renderDropGuide(GuiGraphicsExtractor ctx, Font tr, Minecraft client, ActiveDrop drop, int x, int y) {
         double relative;
         double dx = drop.x - client.player.getX();
         double dz = drop.z - client.player.getZ();
         double distance = Math.hypot(dx, dz);
         double bearing = Math.toDegrees(Math.atan2(-dx, dz));
-        for (relative = bearing - (double)client.player.getYaw(); relative > 180.0; relative -= 360.0) {
+        for (relative = bearing - (double)client.player.getYRot(); relative > 180.0; relative -= 360.0) {
         }
         while (relative < -180.0) {
             relative += 360.0;
@@ -330,24 +325,24 @@ implements Module {
         ctx.fill(x + 2, y + 2, x + w + 2, y + h + 2, -1442840576);
         ctx.fill(x, y, x + w, y + h, -401534184);
         ctx.fill(x, y, x + 4, y + h, color);
-        ctx.drawBorder(x, y, w, h, color);
-        ctx.getMatrices().push();
-        ctx.getMatrices().translate((float)(x + 20), (float)(y + 22), 0.0f);
-        ctx.getMatrices().multiply(RotationAxis.POSITIVE_Z.rotationDegrees((float)relative));
+        ctx.outline(x, y, w, h, color);
+        ctx.pose().pushMatrix();
+        ctx.pose().translate((float)(x + 20), (float)(y + 22));
+        ctx.pose().rotate((float)Math.toRadians((float)relative));
         this.drawGuideArrow(ctx, color);
-        ctx.getMatrices().pop();
-        MutableText title = Text.translatable((String)"zombiezcompanion.drop_alert.guide.title");
-        MutableText line = Text.translatable((String)"zombiezcompanion.drop_alert.guide.line", (Object[])new Object[]{drop.itemName, (int)Math.round(distance)});
-        ctx.drawText(tr, (Text)title, x + 42, y + 8, -8874241, false);
-        ctx.drawTextWithShadow(tr, tr.trimToWidth(line.getString(), w - 50), x + 42, y + 22, -1);
+        ctx.pose().popMatrix();
+        MutableComponent title = Component.translatable((String)"zombiezcompanion.drop_alert.guide.title");
+        MutableComponent line = Component.translatable((String)"zombiezcompanion.drop_alert.guide.line", (Object[])new Object[]{drop.itemName, (int)Math.round(distance)});
+        ctx.text(tr, (Component)title, x + 42, y + 8, -8874241, false);
+        ctx.text(tr, tr.plainSubstrByWidth(line.getString(), w - 50), x + 42, y + 22, -1);
         if (this.activeDrops.size() > 1) {
             String counter = "+" + (this.activeDrops.size() - 1);
-            int cw = tr.getWidth(counter);
-            ctx.drawTextWithShadow(tr, counter, x + w - cw - 6, y + 6, -8353376);
+            int cw = tr.width(counter);
+            ctx.text(tr, counter, x + w - cw - 6, y + 6, -8353376);
         }
     }
 
-    private void drawGuideArrow(DrawContext ctx, int color) {
+    private void drawGuideArrow(GuiGraphicsExtractor ctx, int color) {
         int shadow = -872415232;
         ctx.fill(-1, -9, 2, 8, shadow);
         ctx.fill(-5, -6, 6, -2, shadow);
@@ -374,7 +369,7 @@ implements Module {
         if (volume <= 0.0f) {
             return;
         }
-        MinecraftClient mc = MinecraftClient.getInstance();
+        Minecraft mc = Minecraft.getInstance();
         if (mc.player == null) {
             return;
         }
@@ -387,7 +382,7 @@ implements Module {
             case DropRarity.MYTHIC, DropRarity.EXALTED -> 1.8f;
             case DropRarity.PRIMAL -> 2.0f;
         };
-        mc.getSoundManager().play((SoundInstance)PositionedSoundInstance.master((SoundEvent)((SoundEvent)SoundEvents.BLOCK_NOTE_BLOCK_BELL.value()), (float)pitch, (float)volume));
+        mc.getSoundManager().play((SoundInstance)SimpleSoundInstance.forUI((SoundEvent)((SoundEvent)SoundEvents.NOTE_BLOCK_BELL.value()), (float)pitch, (float)volume));
     }
 
     private void pushNotification(DropRarity rarity, String itemName, double distance) {

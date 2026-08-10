@@ -15,16 +15,16 @@ import java.util.ArrayList;
 import java.util.List;
 import net.fabricmc.fabric.api.event.player.AttackBlockCallback;
 import net.fabricmc.fabric.api.event.player.UseBlockCallback;
-import net.minecraft.util.ActionResult;
-import net.minecraft.world.World;
-import net.minecraft.block.AbstractSkullBlock;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.text.Text;
-import net.minecraft.block.BlockState;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.sound.SoundEvent;
-import net.minecraft.sound.SoundEvents;
-import net.minecraft.client.gui.screen.Screen;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.core.BlockPos;
+import net.minecraft.network.chat.Component;
+import net.minecraft.sounds.SoundEvent;
+import net.minecraft.sounds.SoundEvents;
+import net.minecraft.world.InteractionResult;
+import net.minecraft.world.level.Level;
+import net.minecraft.world.level.block.AbstractSkullBlock;
+import net.minecraft.world.level.block.state.BlockState;
 
 public final class SkullsModule
 implements Module {
@@ -47,7 +47,7 @@ implements Module {
 
     @Override
     public String description() {
-        return Text.translatable((String)"zombiezcompanion.module.skulls.desc").getString();
+        return Component.translatable((String)"zombiezcompanion.module.skulls.desc").getString();
     }
 
     @Override
@@ -75,15 +75,15 @@ implements Module {
         this.configManager = ctx.configManager();
         UseBlockCallback.EVENT.register((player, world, hand, hit) -> {
             this.handleClick(world, hit.getBlockPos());
-            return ActionResult.PASS;
+            return InteractionResult.PASS;
         });
         AttackBlockCallback.EVENT.register((player, world, hand, pos, direction) -> {
             this.handleClick(world, pos);
-            return ActionResult.PASS;
+            return InteractionResult.PASS;
         });
     }
 
-    private void handleClick(World world, BlockPos pos) {
+    private void handleClick(Level world, BlockPos pos) {
         if (this.configManager == null || pos == null || world == null) {
             return;
         }
@@ -106,7 +106,7 @@ implements Module {
             return;
         }
         this.setVisited(skull.id(), true);
-        MinecraftClient mc = MinecraftClient.getInstance();
+        Minecraft mc = Minecraft.getInstance();
         if (mc != null && mc.player != null) {
             mc.player.playSound((SoundEvent)SoundEvents.UI_BUTTON_CLICK.value(), 0.4f, 1.6f);
         }
@@ -331,7 +331,7 @@ implements Module {
     }
 
     public boolean guideToNearestUnvisited() {
-        MinecraftClient mc = MinecraftClient.getInstance();
+        Minecraft mc = Minecraft.getInstance();
         if (mc.player == null) {
             return false;
         }
@@ -405,7 +405,7 @@ implements Module {
             return false;
         }
         this.removeZoneWaypoints(zoneNum);
-        MinecraftClient mc = MinecraftClient.getInstance();
+        Minecraft mc = Minecraft.getInstance();
         double px = mc.player != null ? mc.player.getX() : 0.0;
         double pz = mc.player != null ? mc.player.getZ() : 0.0;
         ArrayList<ZombieZMapData.Point> pts = new ArrayList<ZombieZMapData.Point>();

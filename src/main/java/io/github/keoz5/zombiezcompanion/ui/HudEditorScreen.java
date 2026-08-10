@@ -7,12 +7,11 @@ import io.github.keoz5.zombiezcompanion.hud.HudElements;
 import io.github.keoz5.zombiezcompanion.ui.widget.StyledButton;
 import java.util.ArrayList;
 import java.util.List;
-import net.minecraft.text.Text;
-import net.minecraft.client.gui.DrawContext;
-import net.minecraft.client.gui.Element;
-import net.minecraft.client.gui.screen.Screen;
-import net.minecraft.text.MutableText;
-import net.minecraft.text.StringVisitable;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.FormattedText;
+import net.minecraft.network.chat.MutableComponent;
 
 public final class HudEditorScreen
 extends Screen {
@@ -29,7 +28,7 @@ extends Screen {
     private Box resizing;
 
     public HudEditorScreen(Screen parent, ConfigManager configManager) {
-        super((Text)Text.translatable((String)"zombiezcompanion.hud.editor.title"));
+        super((Component)Component.translatable((String)"zombiezcompanion.hud.editor.title"));
         this.parent = parent;
         this.configManager = configManager;
     }
@@ -53,15 +52,16 @@ extends Screen {
             }
             this.boxes.add(new Box(e, HudEditorScreen.clamp(x, 0, this.width - w), HudEditorScreen.clamp(y, 0, this.height - h), w, h, baseW, baseH, scale));
         }
-        this.addDrawableChild(new StyledButton(this.width / 2 - 160, this.height - 34, 150, 22, (Text)Text.translatable((String)"zombiezcompanion.hud.editor.reset_all"), b -> {
+        this.addRenderableWidget(new StyledButton(this.width / 2 - 160, this.height - 34, 150, 22, (Component)Component.translatable((String)"zombiezcompanion.hud.editor.reset_all"), b -> {
             HudAnchor.resetAll(this.configManager.get().hud);
             this.configManager.save();
-            this.clearAndInit();
+            this.rebuildWidgets();
         }, -12965328, -11716288, -854792));
-        this.addDrawableChild(new StyledButton(this.width / 2 + 10, this.height - 34, 150, 22, (Text)Text.translatable((String)"zombiezcompanion.button.close"), b -> this.close(), -11441921, -8874241, -854792));
+        this.addRenderableWidget(new StyledButton(this.width / 2 + 10, this.height - 34, 150, 22, (Component)Component.translatable((String)"zombiezcompanion.button.close"), b -> this.onClose(), -11441921, -8874241, -854792));
     }
 
-    public boolean mouseClicked(double mouseX, double mouseY, int button) {
+    public boolean mouseClicked(net.minecraft.client.input.MouseButtonEvent event, boolean doubleClick) {
+        double mouseX = event.x(), mouseY = event.y(); int button = event.button();
         if (button == 0) {
             Box box;
             int i;
@@ -80,10 +80,11 @@ extends Screen {
                 return true;
             }
         }
-        return super.mouseClicked(mouseX, mouseY, button);
+        return super.mouseClicked(event, doubleClick);
     }
 
-    public boolean mouseDragged(double mouseX, double mouseY, int button, double dx, double dy) {
+    public boolean mouseDragged(net.minecraft.client.input.MouseButtonEvent event, double dx, double dy) {
+        double mouseX = event.x(), mouseY = event.y(); int button = event.button();
         if (this.resizing != null) {
             if (this.resizing.element.id.equals("mini_map")) {
                 int newSize = (int)Math.round(Math.max(mouseX - (double)this.resizing.x, mouseY - (double)this.resizing.y));
@@ -109,10 +110,11 @@ extends Screen {
             this.dragging.y = HudEditorScreen.clamp(snapped[1], 0, this.height - this.dragging.h);
             return true;
         }
-        return super.mouseDragged(mouseX, mouseY, button, dx, dy);
+        return super.mouseDragged(event, dx, dy);
     }
 
-    public boolean mouseReleased(double mouseX, double mouseY, int button) {
+    public boolean mouseReleased(net.minecraft.client.input.MouseButtonEvent event) {
+        double mouseX = event.x(), mouseY = event.y(); int button = event.button();
         if (this.resizing != null) {
             if (this.resizing.element.id.equals("mini_map")) {
                 this.configManager.get().map.miniMapSize = this.resizing.w;
@@ -130,7 +132,7 @@ extends Screen {
             this.dragging = null;
             return true;
         }
-        return super.mouseReleased(mouseX, mouseY, button);
+        return super.mouseReleased(event);
     }
 
     private boolean inHandle(Box box, double mouseX, double mouseY) {
@@ -165,7 +167,7 @@ extends Screen {
         return new int[]{nx, ny};
     }
 
-    public void render(DrawContext ctx, int mouseX, int mouseY, float delta) {
+    public void extractRenderState(GuiGraphicsExtractor ctx, int mouseX, int mouseY, float delta) {
         ctx.fill(0, 0, this.width, this.height, -871756782);
         ctx.fill(this.width / 2, 0, this.width / 2 + 1, this.height, 0x22FFFFFF);
         ctx.fill(0, this.height / 2, this.width, this.height / 2 + 1, 0x22FFFFFF);
@@ -175,46 +177,47 @@ extends Screen {
             boolean bl = active = box == this.dragging || box == this.resizing;
             int fill = active ? -2006023425 : (hovered ? 1716611327 : 1142233121);
             ctx.fill(box.x, box.y, box.x + box.w, box.y + box.h, fill);
-            ctx.drawBorder(box.x, box.y, box.w, box.h, active || hovered ? -8874241 : 1719770367);
-            MutableText label = Text.translatable((String)box.element.labelKey);
-            int lw = this.textRenderer.getWidth((StringVisitable)label);
+            ctx.outline(box.x, box.y, box.w, box.h, active || hovered ? -8874241 : 1719770367);
+            MutableComponent label = Component.translatable((String)box.element.labelKey);
+            int lw = this.font.width((FormattedText)label);
             int lx = box.x + Math.max(2, (box.w - lw) / 2);
             int ly = box.y + Math.max(2, (box.h - 8) / 2);
-            ctx.drawTextWithShadow(this.textRenderer, (Text)label, lx, ly, -854792);
+            ctx.text(this.font, (Component)label, lx, ly, -854792);
             if (!box.element.scalable) continue;
             boolean hoverHandle = this.inHandle(box, mouseX, mouseY) || box == this.resizing;
             int hx = box.x + box.w - 9;
             int hy = box.y + box.h - 9;
             ctx.fill(hx, hy, box.x + box.w, box.y + box.h, hoverHandle ? -9534721 : -863333438);
-            ctx.drawBorder(hx, hy, 9, 9, -8874241);
+            ctx.outline(hx, hy, 9, 9, -8874241);
             if (!active && !hovered) continue;
             String tag = box.element.id.equals("mini_map") ? box.w + " px" : Math.round(box.scale * 100.0) + "%";
-            ctx.drawTextWithShadow(this.textRenderer, tag, box.x + 2, box.y - 10, -8874241);
+            ctx.text(this.font, tag, box.x + 2, box.y - 10, -8874241);
         }
-        ctx.drawCenteredTextWithShadow(this.textRenderer, (Text)Text.translatable((String)"zombiezcompanion.hud.editor.title"), this.width / 2, 14, -854792);
-        ctx.drawCenteredTextWithShadow(this.textRenderer, (Text)Text.translatable((String)"zombiezcompanion.hud.editor.hint"), this.width / 2, 28, -8353376);
-        super.render(ctx, mouseX, mouseY, delta);
+        ctx.centeredText(this.font, (Component)Component.translatable((String)"zombiezcompanion.hud.editor.title"), this.width / 2, 14, -854792);
+        ctx.centeredText(this.font, (Component)Component.translatable((String)"zombiezcompanion.hud.editor.hint"), this.width / 2, 28, -8353376);
+        super.extractRenderState(ctx, mouseX, mouseY, delta);
     }
 
-    public void renderBackground(DrawContext ctx, int mouseX, int mouseY, float delta) {
+    public void extractBackground(GuiGraphicsExtractor ctx, int mouseX, int mouseY, float delta) {
     }
 
-    public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
+    public boolean keyPressed(net.minecraft.client.input.KeyEvent event) {
+        int keyCode = event.key(), scanCode = event.scancode(), modifiers = event.modifiers();
         if (keyCode == 256) {
-            this.close();
+            this.onClose();
             return true;
         }
-        return super.keyPressed(keyCode, scanCode, modifiers);
+        return super.keyPressed(event);
     }
 
-    public void close() {
+    public void onClose() {
         this.configManager.save();
-        if (this.client != null) {
-            this.client.setScreen(this.parent);
+        if (this.minecraft != null) {
+            this.minecraft.setScreen(this.parent);
         }
     }
 
-    public boolean shouldPause() {
+    public boolean isPauseScreen() {
         return false;
     }
 

@@ -3,8 +3,8 @@ package io.github.keoz5.zombiezcompanion.modules.players;
 import io.github.keoz5.zombiezcompanion.ZombieZCompanionClient;
 import io.github.keoz5.zombiezcompanion.config.ConfigManager;
 import io.github.keoz5.zombiezcompanion.modules.telemetry.PresenceCache;
-import net.minecraft.util.Formatting;
-import net.minecraft.text.Text;
+import net.minecraft.ChatFormatting;
+import net.minecraft.network.chat.Component;
 
 public final class ModUserTag {
     private static final String BADGE = "\u25c8 ";
@@ -29,8 +29,8 @@ public final class ModUserTag {
         return false;
     }
 
-    public static Text decorate(Text original) {
-        return Text.literal((String)BADGE).formatted(Formatting.AQUA).append(original);
+    public static Component decorate(Component original) {
+        return Component.literal((String)BADGE).withStyle(ChatFormatting.AQUA).append(original);
     }
 }
 

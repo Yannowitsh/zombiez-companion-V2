@@ -6,10 +6,9 @@ import io.github.keoz5.zombiezcompanion.modules.dropalert.DropAlertModule;
 import io.github.keoz5.zombiezcompanion.modules.dropalert.DropRarity;
 import io.github.keoz5.zombiezcompanion.ui.ModuleOptionsScreen;
 import io.github.keoz5.zombiezcompanion.ui.widget.StyledButton;
-import net.minecraft.text.Text;
-import net.minecraft.client.gui.DrawContext;
-import net.minecraft.client.gui.Element;
-import net.minecraft.client.gui.screen.Screen;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.network.chat.Component;
 
 public final class DropAlertOptionsScreen
 extends ModuleOptionsScreen {
@@ -44,19 +43,19 @@ extends ModuleOptionsScreen {
         this.addGadgetsToggle(x + half + gap, filterY + 24, half);
         this.addConsumablesButton(x, filterY + 48, availableW);
         this.addMarkerStyleButton(x, filterY + 72, availableW);
-        this.addCrossLink(x, filterY + 102, availableW, "stats", (Text)Text.translatable((String)"zombiezcompanion.crosslink.stats"));
+        this.addCrossLink(x, filterY + 102, availableW, "stats", (Component)Component.translatable((String)"zombiezcompanion.crosslink.stats"));
     }
 
     private void addConsumablesButton(int x, int y, int w) {
-        this.addDrawableChild(new StyledButton(x, y, w, 20, (Text)Text.translatable((String)"zombiezcompanion.drop_alert.consumables.open"), button -> {
-            if (this.client != null) {
-                this.client.setScreen((Screen)new ConsumablesScreen(this, this.configManager));
+        this.addRenderableWidget(new StyledButton(x, y, w, 20, (Component)Component.translatable((String)"zombiezcompanion.drop_alert.consumables.open"), button -> {
+            if (this.minecraft != null) {
+                this.minecraft.setScreen((Screen)new ConsumablesScreen(this, this.configManager));
             }
         }, -266723542, -265932737, -854792));
     }
 
     private void addToggle(int x, int y, int w, DropRarity rarity) {
-        this.addDrawableChild(new StyledButton(x, y, w, 20, this.toggleLabel(rarity), button -> {
+        this.addRenderableWidget(new StyledButton(x, y, w, 20, this.toggleLabel(rarity), button -> {
             boolean next = !this.moduleRef.enabled(rarity);
             this.moduleRef.setEnabled(rarity, next);
             button.setMessage(this.toggleLabel(rarity));
@@ -65,7 +64,7 @@ extends ModuleOptionsScreen {
     }
 
     private void addFoodToggle(int x, int y, int w) {
-        this.addDrawableChild(new StyledButton(x, y, w, 20, this.foodToggleLabel(), button -> {
+        this.addRenderableWidget(new StyledButton(x, y, w, 20, this.foodToggleLabel(), button -> {
             boolean next = !this.moduleRef.foodEnabled();
             this.moduleRef.setFoodEnabled(next);
             button.setMessage(this.foodToggleLabel());
@@ -74,7 +73,7 @@ extends ModuleOptionsScreen {
     }
 
     private void addItemsToggle(int x, int y, int w) {
-        this.addDrawableChild(new StyledButton(x, y, w, 20, this.itemsToggleLabel(), button -> {
+        this.addRenderableWidget(new StyledButton(x, y, w, 20, this.itemsToggleLabel(), button -> {
             boolean next = !this.moduleRef.itemsEnabled();
             this.moduleRef.setItemsEnabled(next);
             button.setMessage(this.itemsToggleLabel());
@@ -83,7 +82,7 @@ extends ModuleOptionsScreen {
     }
 
     private void addGadgetsToggle(int x, int y, int w) {
-        this.addDrawableChild(new StyledButton(x, y, w, 20, this.gadgetsToggleLabel(), button -> {
+        this.addRenderableWidget(new StyledButton(x, y, w, 20, this.gadgetsToggleLabel(), button -> {
             boolean next = !this.moduleRef.gadgetsEnabled();
             this.moduleRef.setGadgetsEnabled(next);
             button.setMessage(this.gadgetsToggleLabel());
@@ -92,42 +91,42 @@ extends ModuleOptionsScreen {
     }
 
     private void addMarkerStyleButton(int x, int y, int w) {
-        this.addDrawableChild(new StyledButton(x, y, w, 20, this.markerStyleLabel(), button -> {
+        this.addRenderableWidget(new StyledButton(x, y, w, 20, this.markerStyleLabel(), button -> {
             this.moduleRef.cycleMarkerStyle();
             button.setMessage(this.markerStyleLabel());
         }, -266723542, -265932737, -854792));
     }
 
-    private Text toggleLabel(DropRarity rarity) {
-        return Text.translatable((String)"zombiezcompanion.toggle.format", (Object[])new Object[]{Text.translatable((String)("zombiezcompanion.drop_alert.rarity." + rarity.key)), Text.translatable((String)(this.moduleRef.enabled(rarity) ? "zombiezcompanion.state.on" : "zombiezcompanion.state.off"))});
+    private Component toggleLabel(DropRarity rarity) {
+        return Component.translatable((String)"zombiezcompanion.toggle.format", (Object[])new Object[]{Component.translatable((String)("zombiezcompanion.drop_alert.rarity." + rarity.key)), Component.translatable((String)(this.moduleRef.enabled(rarity) ? "zombiezcompanion.state.on" : "zombiezcompanion.state.off"))});
     }
 
-    private Text foodToggleLabel() {
-        return Text.translatable((String)"zombiezcompanion.toggle.format", (Object[])new Object[]{Text.translatable((String)"zombiezcompanion.drop_alert.food"), Text.translatable((String)(this.moduleRef.foodEnabled() ? "zombiezcompanion.state.on" : "zombiezcompanion.state.off"))});
+    private Component foodToggleLabel() {
+        return Component.translatable((String)"zombiezcompanion.toggle.format", (Object[])new Object[]{Component.translatable((String)"zombiezcompanion.drop_alert.food"), Component.translatable((String)(this.moduleRef.foodEnabled() ? "zombiezcompanion.state.on" : "zombiezcompanion.state.off"))});
     }
 
-    private Text itemsToggleLabel() {
-        return Text.translatable((String)"zombiezcompanion.toggle.format", (Object[])new Object[]{Text.translatable((String)"zombiezcompanion.drop_alert.items"), Text.translatable((String)(this.moduleRef.itemsEnabled() ? "zombiezcompanion.state.on" : "zombiezcompanion.state.off"))});
+    private Component itemsToggleLabel() {
+        return Component.translatable((String)"zombiezcompanion.toggle.format", (Object[])new Object[]{Component.translatable((String)"zombiezcompanion.drop_alert.items"), Component.translatable((String)(this.moduleRef.itemsEnabled() ? "zombiezcompanion.state.on" : "zombiezcompanion.state.off"))});
     }
 
-    private Text gadgetsToggleLabel() {
-        return Text.translatable((String)"zombiezcompanion.toggle.format", (Object[])new Object[]{Text.translatable((String)"zombiezcompanion.drop_alert.gadgets"), Text.translatable((String)(this.moduleRef.gadgetsEnabled() ? "zombiezcompanion.state.on" : "zombiezcompanion.state.off"))});
+    private Component gadgetsToggleLabel() {
+        return Component.translatable((String)"zombiezcompanion.toggle.format", (Object[])new Object[]{Component.translatable((String)"zombiezcompanion.drop_alert.gadgets"), Component.translatable((String)(this.moduleRef.gadgetsEnabled() ? "zombiezcompanion.state.on" : "zombiezcompanion.state.off"))});
     }
 
-    private Text markerStyleLabel() {
+    private Component markerStyleLabel() {
         String key = this.moduleRef.markerStyle() == 0 ? "zombiezcompanion.drop_alert.style.beacon" : "zombiezcompanion.drop_alert.style.arrow";
-        return Text.translatable((String)"zombiezcompanion.drop_alert.style.label", (Object[])new Object[]{Text.translatable((String)key)});
+        return Component.translatable((String)"zombiezcompanion.drop_alert.style.label", (Object[])new Object[]{Component.translatable((String)key)});
     }
 
     @Override
-    public void render(DrawContext ctx, int mouseX, int mouseY, float delta) {
-        super.render(ctx, mouseX, mouseY, delta);
-        ctx.drawTextWithShadow(this.textRenderer, (Text)Text.translatable((String)"zombiezcompanion.drop_alert.options.header"), this.panelX1 + 36, this.contentY1 + 20, -854792);
-        ctx.drawText(this.textRenderer, (Text)Text.translatable((String)"zombiezcompanion.drop_alert.options.hint"), this.panelX1 + 36, this.contentY1 + 34, -8353376, false);
+    public void extractRenderState(GuiGraphicsExtractor ctx, int mouseX, int mouseY, float delta) {
+        super.extractRenderState(ctx, mouseX, mouseY, delta);
+        ctx.text(this.font, (Component)Component.translatable((String)"zombiezcompanion.drop_alert.options.header"), this.panelX1 + 36, this.contentY1 + 20, -854792);
+        ctx.text(this.font, (Component)Component.translatable((String)"zombiezcompanion.drop_alert.options.hint"), this.panelX1 + 36, this.contentY1 + 34, -8353376, false);
     }
 
     @Override
-    protected void renderOptionsBackground(DrawContext ctx) {
+    protected void renderOptionsBackground(GuiGraphicsExtractor ctx) {
         int x = this.panelX1 + 24;
         int y = this.contentY1 + 14;
         int w = this.panelX2 - this.panelX1 - 48;
@@ -135,7 +134,7 @@ extends ModuleOptionsScreen {
         ctx.fill(x + 2, y + 3, x + w + 2, y + h + 3, -1442840576);
         ctx.fill(x, y, x + w, y + h, -267053025);
         ctx.fill(x, y, x + w, y + 2, -8874241);
-        ctx.drawBorder(x, y, w, h, -14736594);
+        ctx.outline(x, y, w, h, -14736594);
     }
 }
 

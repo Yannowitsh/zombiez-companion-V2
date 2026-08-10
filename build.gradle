@@ -1,5 +1,8 @@
 plugins {
-	id 'fabric-loom' version "${loom_version}"
+	// Minecraft 26.1+ ships unobfuscated, so use the non-remap Loom variant.
+	// (The legacy 'fabric-loom' id selects the remap pipeline, which requires
+	// deobfuscation mappings that no longer exist for these versions.)
+	id 'net.fabricmc.fabric-loom' version "${loom_version}"
 	id 'maven-publish'
 }
 
@@ -7,7 +10,9 @@ version = project.mod_version
 group = project.maven_group
 
 base {
-	archivesName = project.archives_base_name
+	// Jar name: <archives_base_name>-<minecraft_version>-<mod_version>
+	// e.g. zombiezcompanionV2-26.1.2-1.0.1
+	archivesName = "${project.archives_base_name}-${project.minecraft_version}"
 }
 
 repositories {
@@ -20,13 +25,16 @@ repositories {
 
 dependencies {
 	minecraft "com.mojang:minecraft:${project.minecraft_version}"
-	mappings "net.fabricmc:yarn:${project.yarn_mappings}:v2"
-	modImplementation "net.fabricmc:fabric-loader:${project.loader_version}"
+	// No mappings dependency: Minecraft 26.1+ ships deobfuscated with official
+	// names, so the non-remap Loom pipeline uses them directly (Yarn removed).
+	// Unobfuscated pipeline: mod deps are already in the correct namespace, so use
+	// the standard configurations (mod{Implementation,CompileOnly} no longer exist).
+	implementation "net.fabricmc:fabric-loader:${project.loader_version}"
 
-	modImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_api_version}"
+	implementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_api_version}"
 
 	// Optional ModMenu integration (suggested, not required at runtime).
-	modCompileOnly "com.terraformersmc:modmenu:${project.modmenu_version}"
+	compileOnly "com.terraformersmc:modmenu:${project.modmenu_version}"
 }
 
 processResources {
@@ -38,13 +46,18 @@ processResources {
 }
 
 tasks.withType(JavaCompile).configureEach {
-	it.options.release = 21
+	it.options.release = 25
 }
 
 java {
 	withSourcesJar()
-	sourceCompatibility = JavaVersion.VERSION_21
-	targetCompatibility = JavaVersion.VERSION_21
+
+	// Minecraft 26.1.2 requires Java 25. Use a toolchain so Gradle provisions the
+	// correct JDK automatically (via the foojay resolver) even when the daemon runs
+	// on an older JVM.
+	toolchain {
+		languageVersion = JavaLanguageVersion.of(25)
+	}
 }
 
 jar {

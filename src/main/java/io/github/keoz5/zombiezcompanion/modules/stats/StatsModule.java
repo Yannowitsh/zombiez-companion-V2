@@ -22,18 +22,18 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-import net.minecraft.entity.Entity;
-import net.minecraft.entity.ItemEntity;
-import net.minecraft.item.ItemStack;
-import net.minecraft.text.Text;
-import net.minecraft.scoreboard.ScoreboardObjective;
-import net.minecraft.scoreboard.Team;
-import net.minecraft.scoreboard.Scoreboard;
-import net.minecraft.scoreboard.AbstractTeam;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.gui.screen.Screen;
-import net.minecraft.scoreboard.ScoreboardDisplaySlot;
-import net.minecraft.scoreboard.ScoreboardEntry;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.network.chat.Component;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.item.ItemEntity;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.scores.DisplaySlot;
+import net.minecraft.world.scores.Objective;
+import net.minecraft.world.scores.PlayerScoreEntry;
+import net.minecraft.world.scores.PlayerTeam;
+import net.minecraft.world.scores.Scoreboard;
+import net.minecraft.world.scores.Team;
 
 public final class StatsModule
 implements Module {
@@ -69,7 +69,7 @@ implements Module {
 
     @Override
     public String description() {
-        return Text.translatable((String)"zombiezcompanion.module.stats.desc").getString();
+        return Component.translatable((String)"zombiezcompanion.module.stats.desc").getString();
     }
 
     @Override
@@ -103,8 +103,8 @@ implements Module {
     }
 
     @Override
-    public void onClientTick(MinecraftClient client) {
-        if (client.player == null || client.world == null) {
+    public void onClientTick(Minecraft client) {
+        if (client.player == null || client.level == null) {
             return;
         }
         if (!ZombieZDetector.isOnZombieZ()) {
@@ -139,17 +139,17 @@ implements Module {
     public static void onLocalPickup(ItemStack stack, int amount) {
     }
 
-    private void scanGroundItems(MinecraftClient client) {
-        if (this.configManager == null || client.player == null || client.world == null) {
+    private void scanGroundItems(Minecraft client) {
+        if (this.configManager == null || client.player == null || client.level == null) {
             return;
         }
-        for (Entity e : client.world.getEntities()) {
+        for (Entity e : client.level.entitiesForRendering()) {
             String name;
             ItemStack stack;
             UUID id;
             if (!(e instanceof ItemEntity)) continue;
             ItemEntity item = (ItemEntity)e;
-            if (e.squaredDistanceTo((Entity)client.player) > 256.0 || !this.seenItemUuids.add(id = e.getUuid()) || (stack = item.getStack()) == null || stack.isEmpty() || DropClassifier.isGadget(name = stack.getName().getString()) || DropClassifier.isFood(name)) continue;
+            if (e.distanceToSqr((Entity)client.player) > 256.0 || !this.seenItemUuids.add(id = e.getUUID()) || (stack = item.getItem()) == null || stack.isEmpty() || DropClassifier.isGadget(name = stack.getHoverName().getString()) || DropClassifier.isFood(name)) continue;
             this.trackStat(DropClassifier.rarityOf(stack), stack.getCount());
         }
         if (this.seenItemUuids.size() > 5000) {
@@ -169,24 +169,24 @@ implements Module {
         stats.totalDrops += count;
     }
 
-    private void readSidebar(MinecraftClient client, long now) {
-        Scoreboard sb = client.world.getScoreboard();
+    private void readSidebar(Minecraft client, long now) {
+        Scoreboard sb = client.level.getScoreboard();
         if (sb == null) {
             return;
         }
         StringBuilder dump = new StringBuilder();
         boolean anyMatch = false;
-        ScoreboardObjective obj = sb.getObjectiveForSlot(ScoreboardDisplaySlot.SIDEBAR);
+        Objective obj = sb.getDisplayObjective(DisplaySlot.SIDEBAR);
         if (obj != null) {
             String title = obj.getDisplayName().getString();
             dump.append("\n  [title] ").append(title);
             if (this.tryParse(title, now)) {
                 anyMatch = true;
             }
-            for (ScoreboardEntry e : sb.getScoreboardEntries(obj)) {
-                if (e.name() == null) continue;
-                Team team = sb.getScoreHolderTeam(e.owner());
-                String line = (team != null ? Team.decorateName((AbstractTeam)team, (Text)e.name()) : e.name().copy()).getString();
+            for (PlayerScoreEntry e : sb.listPlayerScores(obj)) {
+                if (e.ownerName() == null) continue;
+                PlayerTeam team = sb.getPlayersTeam(e.owner());
+                String line = (team != null ? PlayerTeam.formatNameForTeam((Team)team, (Component)e.ownerName()) : e.ownerName().copy()).getString();
                 dump.append("\n  ").append(line);
                 if (!this.tryParse(line, now)) continue;
                 anyMatch = true;
@@ -250,7 +250,7 @@ implements Module {
     }
 
     @Override
-    public void onChatMessage(Text message, boolean overlay) {
+    public void onChatMessage(Component message, boolean overlay) {
         Matcher r;
         if (message == null) {
             return;

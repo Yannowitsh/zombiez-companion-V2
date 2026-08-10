@@ -1,99 +1,101 @@
 package io.github.keoz5.zombiezcompanion.keybind;
 
+import com.mojang.blaze3d.platform.InputConstants;
 import java.util.ArrayList;
 import java.util.List;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
-import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
-import net.minecraft.client.option.KeyBinding;
-import net.minecraft.client.util.InputUtil;
+import net.fabricmc.fabric.api.client.keymapping.v1.KeyMappingHelper;
+import net.minecraft.client.KeyMapping;
+import net.minecraft.resources.Identifier;
 
 public final class Keybinds {
-    private static final String CATEGORY = "key.categories.zombiezcompanion";
-    private static KeyBinding openMenu;
-    private static KeyBinding openMap;
-    private static KeyBinding openWaypoints;
-    private static KeyBinding openStats;
-    private static KeyBinding clearGuide;
-    private static KeyBinding openSkulls;
-    private static KeyBinding tpRefuge;
+    // Key categories are now identified by an Identifier (was a translation-key String).
+    private static final KeyMapping.Category CATEGORY = new KeyMapping.Category(Identifier.fromNamespaceAndPath("zombiezcompanion", "main"));
+    private static KeyMapping openMenu;
+    private static KeyMapping openMap;
+    private static KeyMapping openWaypoints;
+    private static KeyMapping openStats;
+    private static KeyMapping clearGuide;
+    private static KeyMapping openSkulls;
+    private static KeyMapping tpRefuge;
 
     private Keybinds() {
     }
 
     public static void register(Runnable onMenuPressed, Runnable onMapPressed, Runnable onWaypointsPressed, Runnable onStatsPressed, Runnable onClearGuidePressed, Runnable onSkullsPressed, Runnable onTpRefugePressed) {
-        openMenu = KeyBindingHelper.registerKeyBinding((KeyBinding)new KeyBinding("key.zombiezcompanion.open_menu", InputUtil.Type.KEYSYM, 344, CATEGORY));
-        openMap = KeyBindingHelper.registerKeyBinding((KeyBinding)new KeyBinding("key.zombiezcompanion.open_map", InputUtil.Type.KEYSYM, 77, CATEGORY));
-        openWaypoints = KeyBindingHelper.registerKeyBinding((KeyBinding)new KeyBinding("key.zombiezcompanion.open_waypoints", InputUtil.Type.KEYSYM, 78, CATEGORY));
-        openStats = KeyBindingHelper.registerKeyBinding((KeyBinding)new KeyBinding("key.zombiezcompanion.open_stats", InputUtil.Type.KEYSYM, 74, CATEGORY));
-        clearGuide = KeyBindingHelper.registerKeyBinding((KeyBinding)new KeyBinding("key.zombiezcompanion.clear_guide", InputUtil.Type.KEYSYM, 71, CATEGORY));
-        openSkulls = KeyBindingHelper.registerKeyBinding((KeyBinding)new KeyBinding("key.zombiezcompanion.open_skulls", InputUtil.Type.KEYSYM, 75, CATEGORY));
-        tpRefuge = KeyBindingHelper.registerKeyBinding((KeyBinding)new KeyBinding("key.zombiezcompanion.tp_refuge", InputUtil.Type.KEYSYM, -1, CATEGORY));
+        openMenu = KeyMappingHelper.registerKeyMapping((KeyMapping)new KeyMapping("key.zombiezcompanion.open_menu", InputConstants.Type.KEYSYM, 344, CATEGORY));
+        openMap = KeyMappingHelper.registerKeyMapping((KeyMapping)new KeyMapping("key.zombiezcompanion.open_map", InputConstants.Type.KEYSYM, 77, CATEGORY));
+        openWaypoints = KeyMappingHelper.registerKeyMapping((KeyMapping)new KeyMapping("key.zombiezcompanion.open_waypoints", InputConstants.Type.KEYSYM, 78, CATEGORY));
+        openStats = KeyMappingHelper.registerKeyMapping((KeyMapping)new KeyMapping("key.zombiezcompanion.open_stats", InputConstants.Type.KEYSYM, 74, CATEGORY));
+        clearGuide = KeyMappingHelper.registerKeyMapping((KeyMapping)new KeyMapping("key.zombiezcompanion.clear_guide", InputConstants.Type.KEYSYM, 71, CATEGORY));
+        openSkulls = KeyMappingHelper.registerKeyMapping((KeyMapping)new KeyMapping("key.zombiezcompanion.open_skulls", InputConstants.Type.KEYSYM, 75, CATEGORY));
+        tpRefuge = KeyMappingHelper.registerKeyMapping((KeyMapping)new KeyMapping("key.zombiezcompanion.tp_refuge", InputConstants.Type.KEYSYM, -1, CATEGORY));
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
-            while (openMenu.wasPressed()) {
-                if (client.currentScreen != null) continue;
+            while (openMenu.consumeClick()) {
+                if (client.screen != null) continue;
                 onMenuPressed.run();
             }
-            while (openMap.wasPressed()) {
-                if (client.currentScreen != null) continue;
+            while (openMap.consumeClick()) {
+                if (client.screen != null) continue;
                 onMapPressed.run();
             }
-            while (openWaypoints.wasPressed()) {
-                if (client.currentScreen != null) continue;
+            while (openWaypoints.consumeClick()) {
+                if (client.screen != null) continue;
                 onWaypointsPressed.run();
             }
-            while (openStats.wasPressed()) {
-                if (client.currentScreen != null) continue;
+            while (openStats.consumeClick()) {
+                if (client.screen != null) continue;
                 onStatsPressed.run();
             }
-            while (clearGuide.wasPressed()) {
-                if (client.currentScreen != null) continue;
+            while (clearGuide.consumeClick()) {
+                if (client.screen != null) continue;
                 onClearGuidePressed.run();
             }
-            while (openSkulls.wasPressed()) {
-                if (client.currentScreen != null) continue;
+            while (openSkulls.consumeClick()) {
+                if (client.screen != null) continue;
                 onSkullsPressed.run();
             }
-            while (tpRefuge.wasPressed()) {
-                if (client.currentScreen != null) continue;
+            while (tpRefuge.consumeClick()) {
+                if (client.screen != null) continue;
                 onTpRefugePressed.run();
             }
         });
     }
 
     public static boolean matchesClearGuide(int keyCode, int scanCode) {
-        return clearGuide != null && clearGuide.matchesKey(keyCode, scanCode);
+        return clearGuide != null && clearGuide.matches(new net.minecraft.client.input.KeyEvent(keyCode, scanCode, 0));
     }
 
-    public static KeyBinding openMenu() {
+    public static KeyMapping openMenu() {
         return openMenu;
     }
 
-    public static KeyBinding openMap() {
+    public static KeyMapping openMap() {
         return openMap;
     }
 
-    public static KeyBinding openWaypoints() {
+    public static KeyMapping openWaypoints() {
         return openWaypoints;
     }
 
-    public static KeyBinding openStats() {
+    public static KeyMapping openStats() {
         return openStats;
     }
 
-    public static KeyBinding clearGuide() {
+    public static KeyMapping clearGuide() {
         return clearGuide;
     }
 
-    public static KeyBinding openSkulls() {
+    public static KeyMapping openSkulls() {
         return openSkulls;
     }
 
-    public static KeyBinding tpRefuge() {
+    public static KeyMapping tpRefuge() {
         return tpRefuge;
     }
 
-    public static List<KeyBinding> all() {
-        ArrayList<KeyBinding> list = new ArrayList<KeyBinding>();
+    public static List<KeyMapping> all() {
+        ArrayList<KeyMapping> list = new ArrayList<KeyMapping>();
         if (openMenu != null) {
             list.add(openMenu);
         }
