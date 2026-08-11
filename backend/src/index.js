@@ -53,6 +53,11 @@ export default {
       return json({ error: "server_error", detail: String(e) }, 500);
     }
   },
+
+  // Cron (every minute): refresh the Discord "who's online" roster message.
+  async scheduled(event, env, ctx) {
+    ctx.waitUntil(updateRoster(env));
+  },
 };
 
 async function readJson(request) {
@@ -160,6 +165,69 @@ async function getPresence(url, env) {
     });
   }
   return json({ presences });
+}
+
+// --- "Who's online" Discord roster (cron, every minute) ------------------
+// Edits a single message in the roster channel with the currently-online mod users. presence:* keys
+// auto-expire after PRESENCE_TTL, so listing them yields exactly who is online. The message id is kept
+// in KV so we edit (not spam); if the message was deleted, a new one is created.
+const ROSTER_MSG_KEY = "discord:roster_msg";
+
+async function updateRoster(env) {
+  const webhook = env.DISCORD_ROSTER_WEBHOOK_URL;
+  if (!webhook) return;
+  const list = await env.ZZC.list({ prefix: "presence:" });
+  const names = [];
+  for (const k of list.keys) {
+    const v = await env.ZZC.get(k.name);
+    if (!v) continue;
+    try {
+      const p = JSON.parse(v);
+      if (p && p.name) names.push(String(p.name));
+    } catch {}
+  }
+  names.sort((a, b) => a.localeCompare(b));
+  const content = rosterContent(names);
+
+  const msgId = await env.ZZC.get(ROSTER_MSG_KEY);
+  if (msgId) {
+    const r = await fetch(`${webhook}/messages/${msgId}`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ content, allowed_mentions: { parse: [] } }),
+    });
+    if (r.status !== 404) return;
+    // Message was deleted in Discord — fall through and recreate.
+  }
+  const created = await fetch(`${webhook}?wait=true`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ content, username: "ZZC · En ligne", allowed_mentions: { parse: [] } }),
+  });
+  if (created.ok) {
+    try {
+      const msg = await created.json();
+      if (msg && msg.id) await env.ZZC.put(ROSTER_MSG_KEY, String(msg.id));
+    } catch {}
+  }
+}
+
+function rosterContent(names) {
+  const ts = `<t:${Math.floor(Date.now() / 1000)}:R>`;
+  if (!names.length) {
+    return `🔴 **Personne en ligne** · maj ${ts}`;
+  }
+  const header = `🟢 **En ligne (${names.length})** · maj ${ts}\n`;
+  let body = "";
+  let shown = 0;
+  for (const n of names) {
+    const add = (shown ? ", " : "") + n;
+    if (header.length + body.length + add.length > 1900) break;
+    body += add;
+    ++shown;
+  }
+  if (shown < names.length) body += ` … (+${names.length - shown})`;
+  return header + body;
 }
 
 async function postLeaderboard(request, env) {

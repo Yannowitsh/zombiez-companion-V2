@@ -22,6 +22,10 @@ name = "FEEDBACK_LIMITER"
 namespace_id = "1002"
 simple = { limit = 5, period = 60 }
 
+# Every minute: refresh the "who's online" roster message in Discord (scheduled handler).
+[triggers]
+crons = ["* * * * *"]
+
 # Update these on each mod release to drive the in-game update notification.
 [vars]
 LATEST_VERSION = "1.0.2"

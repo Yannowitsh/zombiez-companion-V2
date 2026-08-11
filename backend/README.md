@@ -50,6 +50,20 @@ get `429 rate_limited`. Adjust the `limit`/`period` there if legitimate players 
 > in the dashboard (Manage Account → Notifications) so you're alerted well before any overage. On the
 > Workers Paid plan ($5/mo) a small userbase stays far inside the included quotas.
 
+## "Who's online" roster (cron)
+
+A **Cron Trigger** (`crons = ["* * * * *"]` in `wrangler.toml`) runs every minute and **edits one Discord
+message** with the currently-online mod users (from the auto-expiring `presence:*` keys). Set the target
+channel's webhook and deploy:
+
+```bash
+wrangler secret put DISCORD_ROSTER_WEBHOOK_URL
+wrangler deploy
+```
+
+The message id is stored in KV (`discord:roster_msg`) so it edits in place (no spam); if you delete the
+message in Discord it recreates one. If the secret is unset, the cron is a no-op.
+
 ## Discord routing (per-channel, optional)
 
 Discord messages are grouped by **kind**. Each kind uses its own webhook secret **if set**, otherwise it
