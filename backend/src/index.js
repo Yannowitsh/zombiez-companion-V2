@@ -44,6 +44,18 @@ export default {
       if (path === "/friends/accept" && method === "POST") return postFriendAccept(request, env);
       if (path === "/friends/decline" && method === "POST") return postFriendDecline(request, env);
       if (path === "/friends/remove" && method === "POST") return postFriendRemove(request, env);
+      if (path === "/group" && method === "GET") return getGroup(url, env);
+      if (path === "/group/create" && method === "POST") return groupCreate(request, env);
+      if (path === "/group/invite" && method === "POST") return groupInvite(request, env);
+      if (path === "/group/accept" && method === "POST") return groupAccept(request, env);
+      if (path === "/group/decline" && method === "POST") return groupDecline(request, env);
+      if (path === "/group/leave" && method === "POST") return groupLeave(request, env);
+      if (path === "/group/kick" && method === "POST") return groupKick(request, env);
+      if (path === "/group/transfer" && method === "POST") return groupTransfer(request, env);
+      if (path === "/group/pings" && method === "GET") return getGroupPings(url, env);
+      if (path === "/group/ping" && method === "POST") return groupPing(request, env);
+      if (path === "/group/ping/clear" && method === "POST") return groupPingClear(request, env);
+      if (path === "/group/action" && method === "POST") return groupActionPost(request, env);
       if (path === "/leaderboard" && method === "POST") return postLeaderboard(request, env);
       if (path === "/leaderboard" && method === "GET") return getLeaderboard(env);
       if (path === "/feedback" && method === "POST") return handleFeedback(request, env);
@@ -460,5 +472,204 @@ async function postFriendRemove(request, env) {
     putArr(env, `friend:${b.uuid}`, without(a, b.friend)),
     putArr(env, `friend:${b.friend}`, without(c, b.uuid)),
   ]);
+  return json({ ok: true }, 200);
+}
+
+// --- Groups --------------------------------------------------------------
+// A party of up to MAX_GROUP members, keyed on account UUIDs. A player is in at most one group.
+//   group:<gid>     = { id, chief, members:[{uuid,name}], createdAt }
+//   gmember:<uuid>  = gid                 reverse index: which group a user is in
+//   ginvite:<uuid>  = [{gid, from, fromName, at}]   pending group invites
+const MAX_GROUP = 4;
+
+async function loadGroup(env, gid) {
+  if (!gid) return null;
+  const v = await env.ZZC.get(`group:${gid}`);
+  if (!v) return null;
+  try {
+    const g = JSON.parse(v);
+    if (!Array.isArray(g.members)) g.members = [];
+    return g;
+  } catch { return null; }
+}
+
+async function saveGroup(env, g) {
+  await env.ZZC.put(`group:${g.id}`, JSON.stringify(g));
+}
+
+async function getGroup(url, env) {
+  const uuid = url.searchParams.get("uuid");
+  if (!uuid) return json({ error: "bad_request" }, 400);
+  const gid = await env.ZZC.get(`gmember:${uuid}`);
+  let group = null;
+  if (gid) {
+    group = await loadGroup(env, gid);
+    // Self-heal: the membership pointer references a dead group or a group we're no longer in.
+    if (!group || !group.members.some((m) => m.uuid === uuid)) {
+      await env.ZZC.delete(`gmember:${uuid}`);
+      group = null;
+    }
+  }
+  const invites = await getArr(env, `ginvite:${uuid}`);
+  return json({ group, invites });
+}
+
+async function groupCreate(request, env) {
+  const b = await readJson(request);
+  if (!b || !b.uuid) return json({ error: "bad_request" }, 400);
+  const existing = await env.ZZC.get(`gmember:${b.uuid}`);
+  if (existing && (await loadGroup(env, existing))) return json({ error: "already_in_group" }, 409);
+  const id = crypto.randomUUID();
+  const g = { id, chief: b.uuid, members: [{ uuid: b.uuid, name: b.name || "?" }], createdAt: Date.now() };
+  await saveGroup(env, g);
+  await env.ZZC.put(`gmember:${b.uuid}`, id);
+  return json({ ok: true, id }, 200);
+}
+
+async function groupInvite(request, env) {
+  const b = await readJson(request);
+  if (!b || !b.uuid || !b.to || b.uuid === b.to) return json({ error: "bad_request" }, 400);
+  const g = await loadGroup(env, await env.ZZC.get(`gmember:${b.uuid}`));
+  if (!g) return json({ error: "not_in_group" }, 404);
+  if (g.chief !== b.uuid) return json({ error: "not_chief" }, 403);
+  if (g.members.length >= MAX_GROUP) return json({ error: "group_full" }, 409);
+  if (g.members.some((m) => m.uuid === b.to)) return json({ ok: true, already: "member" }, 200);
+  const targetGid = await env.ZZC.get(`gmember:${b.to}`);
+  if (targetGid && (await loadGroup(env, targetGid))) return json({ error: "target_in_group" }, 409);
+  const invites = await getArr(env, `ginvite:${b.to}`);
+  if (!invites.some((i) => i.gid === g.id)) {
+    invites.unshift({ gid: g.id, from: b.uuid, fromName: b.name || "?", at: Date.now() });
+    await putArr(env, `ginvite:${b.to}`, invites);
+  }
+  return json({ ok: true }, 200);
+}
+
+async function groupAccept(request, env) {
+  const b = await readJson(request);
+  if (!b || !b.uuid || !b.gid) return json({ error: "bad_request" }, 400);
+  const cur = await env.ZZC.get(`gmember:${b.uuid}`);
+  if (cur && (await loadGroup(env, cur))) return json({ error: "already_in_group" }, 409);
+  const invites = await getArr(env, `ginvite:${b.uuid}`);
+  if (!invites.some((i) => i.gid === b.gid)) return json({ error: "no_invite" }, 404);
+  const g = await loadGroup(env, b.gid);
+  if (!g) {
+    await putArr(env, `ginvite:${b.uuid}`, invites.filter((i) => i.gid !== b.gid));
+    return json({ error: "group_gone" }, 404);
+  }
+  if (g.members.length >= MAX_GROUP) return json({ error: "group_full" }, 409);
+  if (!g.members.some((m) => m.uuid === b.uuid)) g.members.push({ uuid: b.uuid, name: b.name || "?" });
+  await saveGroup(env, g);
+  await env.ZZC.put(`gmember:${b.uuid}`, g.id);
+  // Now in a group — drop every pending invite for this user.
+  await env.ZZC.delete(`ginvite:${b.uuid}`);
+  return json({ ok: true }, 200);
+}
+
+async function groupDecline(request, env) {
+  const b = await readJson(request);
+  if (!b || !b.uuid || !b.gid) return json({ error: "bad_request" }, 400);
+  const invites = await getArr(env, `ginvite:${b.uuid}`);
+  await putArr(env, `ginvite:${b.uuid}`, invites.filter((i) => i.gid !== b.gid));
+  return json({ ok: true }, 200);
+}
+
+async function groupLeave(request, env) {
+  const b = await readJson(request);
+  if (!b || !b.uuid) return json({ error: "bad_request" }, 400);
+  const gid = await env.ZZC.get(`gmember:${b.uuid}`);
+  await env.ZZC.delete(`gmember:${b.uuid}`);
+  const g = await loadGroup(env, gid);
+  if (!g) return json({ ok: true }, 200);
+  g.members = g.members.filter((m) => m.uuid !== b.uuid);
+  if (g.members.length === 0) {
+    await env.ZZC.delete(`group:${g.id}`);
+    return json({ ok: true }, 200);
+  }
+  // Chief left — hand off to the oldest remaining member.
+  if (g.chief === b.uuid) g.chief = g.members[0].uuid;
+  await saveGroup(env, g);
+  return json({ ok: true }, 200);
+}
+
+async function groupKick(request, env) {
+  const b = await readJson(request);
+  if (!b || !b.uuid || !b.target || b.uuid === b.target) return json({ error: "bad_request" }, 400);
+  const g = await loadGroup(env, await env.ZZC.get(`gmember:${b.uuid}`));
+  if (!g) return json({ error: "not_in_group" }, 404);
+  if (g.chief !== b.uuid) return json({ error: "not_chief" }, 403);
+  g.members = g.members.filter((m) => m.uuid !== b.target);
+  await saveGroup(env, g);
+  const tGid = await env.ZZC.get(`gmember:${b.target}`);
+  if (tGid === g.id) await env.ZZC.delete(`gmember:${b.target}`);
+  return json({ ok: true }, 200);
+}
+
+async function groupTransfer(request, env) {
+  const b = await readJson(request);
+  if (!b || !b.uuid || !b.target || b.uuid === b.target) return json({ error: "bad_request" }, 400);
+  const g = await loadGroup(env, await env.ZZC.get(`gmember:${b.uuid}`));
+  if (!g) return json({ error: "not_in_group" }, 404);
+  if (g.chief !== b.uuid) return json({ error: "not_chief" }, 403);
+  if (!g.members.some((m) => m.uuid === b.target)) return json({ error: "not_member" }, 404);
+  g.chief = b.target;
+  await saveGroup(env, g);
+  return json({ ok: true }, 200);
+}
+
+// --- Group pings ---------------------------------------------------------
+// One shared position marker per member: gping:<uuid> = {uuid,name,x,y,z,dim,at}. Expires after
+// GPING_TTL so a disconnect doesn't leave a stale marker forever; members poll /group/pings.
+const GPING_TTL = 60 * 30; // 30 minutes
+
+async function groupPing(request, env) {
+  const b = await readJson(request);
+  if (!b || !b.uuid) return json({ error: "bad_request" }, 400);
+  // Only meaningful while in a group, but store regardless; retrieval is group-scoped.
+  const entry = {
+    uuid: b.uuid, name: b.name || "?",
+    x: b.x || 0, y: b.y || 0, z: b.z || 0, dim: b.dim || "", at: Date.now(),
+  };
+  await env.ZZC.put(`gping:${b.uuid}`, JSON.stringify(entry), { expirationTtl: GPING_TTL });
+  return noContent();
+}
+
+async function groupPingClear(request, env) {
+  const b = await readJson(request);
+  if (!b || !b.uuid) return json({ error: "bad_request" }, 400);
+  await env.ZZC.delete(`gping:${b.uuid}`);
+  return noContent();
+}
+
+async function getGroupPings(url, env) {
+  const uuid = url.searchParams.get("uuid");
+  if (!uuid) return json({ error: "bad_request" }, 400);
+  const g = await loadGroup(env, await env.ZZC.get(`gmember:${uuid}`));
+  if (!g) return json({ pings: [], action: null });
+  const pings = [];
+  await Promise.all(g.members.map(async (m) => {
+    const v = await env.ZZC.get(`gping:${m.uuid}`);
+    if (v) {
+      try { pings.push(JSON.parse(v)); } catch {}
+    }
+  }));
+  // Latest chief action (follow-chief), short-lived — polled together with pings.
+  let action = null;
+  const av = await env.ZZC.get(`gaction:${g.id}`);
+  if (av) { try { action = JSON.parse(av); } catch {} }
+  return json({ pings, action });
+}
+
+// Chief broadcasts an action (e.g. a refuge tp) for followers to replay. KV enforces a 60s minimum TTL;
+// clients de-dup by action id (lastActionId), so an action is still replayed at most once.
+const GACTION_TTL = 60;
+
+async function groupActionPost(request, env) {
+  const b = await readJson(request);
+  if (!b || !b.uuid || !b.type) return json({ error: "bad_request" }, 400);
+  const g = await loadGroup(env, await env.ZZC.get(`gmember:${b.uuid}`));
+  if (!g) return json({ error: "not_in_group" }, 404);
+  if (g.chief !== b.uuid) return json({ error: "not_chief" }, 403);
+  const action = { id: crypto.randomUUID(), type: String(b.type), arg: b.arg == null ? "" : String(b.arg), by: b.uuid, at: Date.now() };
+  await env.ZZC.put(`gaction:${g.id}`, JSON.stringify(action), { expirationTtl: GACTION_TTL });
   return json({ ok: true }, 200);
 }

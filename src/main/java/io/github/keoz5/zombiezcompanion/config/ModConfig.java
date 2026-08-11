@@ -34,6 +34,7 @@ public final class ModConfig {
     public TelemetryConfig telemetry = new TelemetryConfig();
     public PlayersConfig players = new PlayersConfig();
     public FriendsConfig friends = new FriendsConfig();
+    public GroupsConfig group = new GroupsConfig();
     public CoordinatesConfig coordinates = new CoordinatesConfig();
     public ConsumablesConfig consumables = new ConsumablesConfig();
     public ColorsConfig colors = new ColorsConfig();

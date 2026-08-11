@@ -13,6 +13,7 @@ import io.github.keoz5.zombiezcompanion.modules.autotext.AutoTextModule;
 import io.github.keoz5.zombiezcompanion.modules.consumables.ConsumablesModule;
 import io.github.keoz5.zombiezcompanion.modules.dropalert.DropAlertModule;
 import io.github.keoz5.zombiezcompanion.modules.friends.FriendsModule;
+import io.github.keoz5.zombiezcompanion.modules.groups.GroupsModule;
 import io.github.keoz5.zombiezcompanion.modules.map.WaypointManagerScreen;
 import io.github.keoz5.zombiezcompanion.modules.map.WaypointsModule;
 import io.github.keoz5.zombiezcompanion.modules.map.ZombieZMapData;
@@ -76,7 +77,12 @@ implements ClientModInitializer {
             if (sm != null && moduleManager.isEnabled("skulls")) {
                 Minecraft.getInstance().setScreen((Screen)new SkullsManagerScreen(null, configManager, sm));
             }
-        }, ZombieZCompanionClient::tpToEventRefuge);
+        }, ZombieZCompanionClient::tpToEventRefuge, () -> {
+            GroupsModule gm = GroupsModule.get();
+            if (gm != null && moduleManager.isEnabled(GroupsModule.ID)) {
+                gm.onPingKey();
+            }
+        });
         moduleManager.startEnabledModules();
         configManager.save();
         Log.info("ZombieZ Companion initialized \u2014 " + moduleManager.modules().size() + " module(s), debug=" + ZombieZCompanionClient.configManager.get().debugMode);
@@ -133,6 +139,7 @@ implements ClientModInitializer {
         mm.register(new TelemetryModule());
         mm.register(new PlayersModule());
         mm.register(new FriendsModule());
+        mm.register(new GroupsModule());
         mm.register(new ConsumablesModule());
     }
 

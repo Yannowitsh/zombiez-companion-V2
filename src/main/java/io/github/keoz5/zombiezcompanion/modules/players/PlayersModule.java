@@ -10,6 +10,7 @@ import io.github.keoz5.zombiezcompanion.core.ModuleCategory;
 import io.github.keoz5.zombiezcompanion.core.ModuleContext;
 import io.github.keoz5.zombiezcompanion.core.ModuleManager;
 import io.github.keoz5.zombiezcompanion.modules.friends.FriendsModule;
+import io.github.keoz5.zombiezcompanion.modules.groups.GroupsModule;
 import io.github.keoz5.zombiezcompanion.modules.map.ZombieZDetector;
 import io.github.keoz5.zombiezcompanion.modules.players.PlayersOptionsScreen;
 import io.github.keoz5.zombiezcompanion.modules.stats.StatsModule;
@@ -142,7 +143,7 @@ implements Module {
             this.deletePresence();
             this.presenceActive = false;
         }
-        if ((this.configManager.get().map.showModUsers || FriendsModule.wantsPresenceRefresh()) && now >= this.nextRefreshMs) {
+        if ((this.configManager.get().map.showModUsers || FriendsModule.wantsPresenceRefresh() || GroupsModule.wantsPresenceRefresh()) && now >= this.nextRefreshMs) {
             this.refreshPresences();
             this.nextRefreshMs = now + PRESENCE_REFRESH_MS;
         }

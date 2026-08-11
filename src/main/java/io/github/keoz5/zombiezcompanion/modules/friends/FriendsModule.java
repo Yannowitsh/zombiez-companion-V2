@@ -21,10 +21,8 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
-import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import net.minecraft.client.Camera;
 import net.minecraft.client.Minecraft;
@@ -84,12 +82,18 @@ implements Module {
 
     @Override
     public boolean hasOptions() {
+        return false;
+    }
+
+    /** Merged into the "Amis & Groupe" module (GroupsModule): this stays a hidden background friends service. */
+    @Override
+    public boolean hidden() {
         return true;
     }
 
     @Override
     public List<String> searchKeywords() {
-        return List.of("amis", "friends", "groupe", "group", "team", "équipe", "tp", "waypoint");
+        return List.of();
     }
 
     @Override
@@ -99,7 +103,7 @@ implements Module {
 
     @Override
     public Screen createOptionsScreen(Screen parent) {
-        return new FriendsScreen(parent, this, this.configManager);
+        return null;
     }
 
     public FriendsConfig config() {
@@ -342,55 +346,42 @@ implements Module {
         return FriendsModule.onlinePresence(mcuuid);
     }
 
-    // --- Rendering ----------------------------------------------------------
+    // --- Rendering (shared) -------------------------------------------------
+    // Friends are no longer tracked in the world; only group members are (see GroupsModule). This static
+    // marker renderer is kept here and reused by GroupsModule.
 
-    @Override
-    public void onHudRender(GuiGraphicsExtractor ctx, float tickDelta) {
-        Minecraft client = Minecraft.getInstance();
-        if (client.player == null || client.screen != null || client.options.hideGui) {
+    /**
+     * Renders one player's marker: their real loaded entity (instant, client-side) when in render distance,
+     * else the backend presence snapshot. Shared by the Friends and Groups modules.
+     */
+    public static void renderPlayerMarker(GuiGraphicsExtractor ctx, Minecraft client, float tickDelta, String playerDim, String mcuuid, String name, int color, String style, int near) {
+        if (client.player == null) {
             return;
         }
-        if (!ZombieZDetector.isOnZombieZ()) {
-            return;
+        double tx, ty, tz;
+        AbstractClientPlayer ent = FriendsModule.loadedPlayer(client, mcuuid);
+        boolean loaded = ent != null;
+        if (loaded) {
+            tx = ent.xo + (ent.getX() - ent.xo) * (double)tickDelta;
+            ty = ent.yo + (ent.getY() - ent.yo) * (double)tickDelta;
+            tz = ent.zo + (ent.getZ() - ent.zo) * (double)tickDelta;
+        } else {
+            PresenceCache.Presence p = FriendsModule.onlinePresence(mcuuid);
+            if (p == null) return;
+            if (!playerDim.isEmpty() && !p.dim().isEmpty() && !playerDim.equals(p.dim())) return;
+            tx = p.x();
+            ty = p.y();
+            tz = p.z();
         }
-        FriendsConfig cfg = this.config();
-        if (!cfg.showFriends) {
-            return;
-        }
-        String playerDim = client.level != null ? client.level.dimension().identifier().toString() : "";
-        Set<String> hidden = new HashSet<String>(cfg.hidden);
-        int near = Math.max(0, cfg.nearHudRange);
-        String style = cfg.markerStyle == null ? "auto" : cfg.markerStyle;
-        for (FriendsCache.Friend f : FriendsCache.friends()) {
-            double tx, ty, tz;
-            if (hidden.contains(f.uuid())) continue;
-            // Prefer the friend's real loaded entity (instant, client-side, no server round-trip); fall back to
-            // the presence snapshot only when they are out of render distance / not loaded.
-            AbstractClientPlayer ent = FriendsModule.loadedPlayer(client, f.uuid());
-            boolean loaded = ent != null;
-            if (loaded) {
-                tx = ent.xo + (ent.getX() - ent.xo) * (double)tickDelta;
-                ty = ent.yo + (ent.getY() - ent.yo) * (double)tickDelta;
-                tz = ent.zo + (ent.getZ() - ent.zo) * (double)tickDelta;
-            } else {
-                PresenceCache.Presence p = FriendsModule.onlinePresence(f.uuid());
-                if (p == null) continue;
-                if (!playerDim.isEmpty() && !p.dim().isEmpty() && !playerDim.equals(p.dim())) continue;
-                tx = p.x();
-                ty = p.y();
-                tz = p.z();
-            }
-            double dist = Math.sqrt(client.player.distanceToSqr(tx, ty, tz));
-            int color = FriendsModule.colorOf(f.uuid());
-            int solid = 0xFF000000 | (color & 0xFFFFFF);
-            boolean farStyle = "waypoint".equals(style) || dist >= (double)near;
-            if (farStyle) {
-                WaypointsModule.renderScreenBeacon(ctx, client, tickDelta, tx, ty, tz, f.name(), solid);
-            } else if ("box".equals(style) && loaded) {
-                FriendsModule.renderEntityBox(ctx, client, tx, ty, tz, ent.getBbHeight(), dist, f.name(), color);
-            } else {
-                FriendsModule.renderCompactMarker(ctx, client, tx, ty, tz, dist, f.name(), solid);
-            }
+        double dist = Math.sqrt(client.player.distanceToSqr(tx, ty, tz));
+        int solid = 0xFF000000 | (color & 0xFFFFFF);
+        boolean farStyle = "waypoint".equals(style) || dist >= (double)near;
+        if (farStyle) {
+            WaypointsModule.renderScreenBeacon(ctx, client, tickDelta, tx, ty, tz, name, solid);
+        } else if ("box".equals(style) && loaded) {
+            FriendsModule.renderEntityBox(ctx, client, tx, ty, tz, ent.getBbHeight(), dist, name, color);
+        } else {
+            FriendsModule.renderCompactMarker(ctx, client, tx, ty, tz, dist, name, solid);
         }
     }
 

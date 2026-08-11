@@ -29,6 +29,10 @@ Thumbs.db
 IDEAS.md
 latest.log
 
+# Reference mods / configs from other authors (inspiration only, never committed)
+/*.jar
+play.rinaorc.com.json
+
 # Local build archive (kept for personal version history, never committed)
 Versions/
 

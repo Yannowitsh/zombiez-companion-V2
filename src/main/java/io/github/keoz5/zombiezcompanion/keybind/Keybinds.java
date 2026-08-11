@@ -18,11 +18,12 @@ public final class Keybinds {
     private static KeyMapping clearGuide;
     private static KeyMapping openSkulls;
     private static KeyMapping tpRefuge;
+    private static KeyMapping pingGroup;
 
     private Keybinds() {
     }
 
-    public static void register(Runnable onMenuPressed, Runnable onMapPressed, Runnable onWaypointsPressed, Runnable onStatsPressed, Runnable onClearGuidePressed, Runnable onSkullsPressed, Runnable onTpRefugePressed) {
+    public static void register(Runnable onMenuPressed, Runnable onMapPressed, Runnable onWaypointsPressed, Runnable onStatsPressed, Runnable onClearGuidePressed, Runnable onSkullsPressed, Runnable onTpRefugePressed, Runnable onPingPressed) {
         openMenu = KeyMappingHelper.registerKeyMapping((KeyMapping)new KeyMapping("key.zombiezcompanion.open_menu", InputConstants.Type.KEYSYM, 344, CATEGORY));
         openMap = KeyMappingHelper.registerKeyMapping((KeyMapping)new KeyMapping("key.zombiezcompanion.open_map", InputConstants.Type.KEYSYM, 77, CATEGORY));
         openWaypoints = KeyMappingHelper.registerKeyMapping((KeyMapping)new KeyMapping("key.zombiezcompanion.open_waypoints", InputConstants.Type.KEYSYM, 78, CATEGORY));
@@ -30,6 +31,7 @@ public final class Keybinds {
         clearGuide = KeyMappingHelper.registerKeyMapping((KeyMapping)new KeyMapping("key.zombiezcompanion.clear_guide", InputConstants.Type.KEYSYM, 71, CATEGORY));
         openSkulls = KeyMappingHelper.registerKeyMapping((KeyMapping)new KeyMapping("key.zombiezcompanion.open_skulls", InputConstants.Type.KEYSYM, 75, CATEGORY));
         tpRefuge = KeyMappingHelper.registerKeyMapping((KeyMapping)new KeyMapping("key.zombiezcompanion.tp_refuge", InputConstants.Type.KEYSYM, -1, CATEGORY));
+        pingGroup = KeyMappingHelper.registerKeyMapping((KeyMapping)new KeyMapping("key.zombiezcompanion.ping_group", InputConstants.Type.KEYSYM, -1, CATEGORY));
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
             while (openMenu.consumeClick()) {
                 if (client.screen != null) continue;
@@ -58,6 +60,10 @@ public final class Keybinds {
             while (tpRefuge.consumeClick()) {
                 if (client.screen != null) continue;
                 onTpRefugePressed.run();
+            }
+            while (pingGroup.consumeClick()) {
+                if (client.screen != null) continue;
+                onPingPressed.run();
             }
         });
     }
@@ -94,6 +100,10 @@ public final class Keybinds {
         return tpRefuge;
     }
 
+    public static KeyMapping pingGroup() {
+        return pingGroup;
+    }
+
     public static List<KeyMapping> all() {
         ArrayList<KeyMapping> list = new ArrayList<KeyMapping>();
         if (openMenu != null) {
@@ -116,6 +126,9 @@ public final class Keybinds {
         }
         if (tpRefuge != null) {
             list.add(tpRefuge);
+        }
+        if (pingGroup != null) {
+            list.add(pingGroup);
         }
         return list;
     }
