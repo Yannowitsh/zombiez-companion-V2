@@ -12,6 +12,7 @@ import io.github.keoz5.zombiezcompanion.log.LogCategory;
 import io.github.keoz5.zombiezcompanion.modules.autotext.AutoTextModule;
 import io.github.keoz5.zombiezcompanion.modules.consumables.ConsumablesModule;
 import io.github.keoz5.zombiezcompanion.modules.dropalert.DropAlertModule;
+import io.github.keoz5.zombiezcompanion.modules.friends.FriendsModule;
 import io.github.keoz5.zombiezcompanion.modules.map.WaypointManagerScreen;
 import io.github.keoz5.zombiezcompanion.modules.map.WaypointsModule;
 import io.github.keoz5.zombiezcompanion.modules.map.ZombieZMapData;
@@ -127,6 +128,7 @@ implements ClientModInitializer {
         mm.register(new SkullsModule());
         mm.register(new TelemetryModule());
         mm.register(new PlayersModule());
+        mm.register(new FriendsModule());
         mm.register(new ConsumablesModule());
     }
 
@@ -184,6 +186,26 @@ implements ClientModInitializer {
         }
         int n = Math.max(0, r.order() - 1);
         Log.debug(LogCategory.EVENT, "quick-tp: player on map 1 -> refuge tp " + n);
+        mc.getConnection().sendCommand("refuge tp " + n);
+    }
+
+    /** Teleport toward an arbitrary world position via the nearest refuge (map 1) or the map-2 refuge. */
+    public static void quickTpTo(double x, double z, String dim) {
+        Minecraft mc = Minecraft.getInstance();
+        if (mc.player == null || mc.getConnection() == null) {
+            return;
+        }
+        if (ZombieZMapData.DIM_MAP2.equals(dim)) {
+            Log.debug(LogCategory.EVENT, "quick-tp: friend on map 2 -> refuge tp w2");
+            mc.getConnection().sendCommand("refuge tp w2");
+            return;
+        }
+        ZombieZMapData.Refuge r = ZombieZMapData.nearestRefuge(x, z);
+        if (r == null) {
+            return;
+        }
+        int n = Math.max(0, r.order() - 1);
+        Log.debug(LogCategory.EVENT, "quick-tp: friend on map 1 -> refuge tp " + n);
         mc.getConnection().sendCommand("refuge tp " + n);
     }
 

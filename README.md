@@ -4,11 +4,11 @@ Client-side, read-only quality-of-life companion mod for the **ZombieZ** Minecra
 Provides modular overlays and helpers (minimap, waypoints, event beacons/timers, HUD, etc.);
 it never automates gameplay.
 
-- **Minecraft:** 1.21.4
-- **Mod loader:** Fabric Loader ≥ 0.16.9
-- **Java:** 21
-- **Mappings:** Yarn (`net.fabricmc.yarn` — see `gradle.properties`)
-- **Build:** Fabric Loom 1.9.2
+- **Minecraft:** 26.1.2
+- **Mod loader:** Fabric Loader ≥ 0.19.3
+- **Java:** 25
+- **Mappings:** official Mojang mappings (bundled — Minecraft 26.1+ ships deobfuscated, no mappings dependency)
+- **Build:** Fabric Loom 1.17.19
 
 ## Building
 
@@ -38,9 +38,46 @@ This is a full rewrite that adds support for the server's second, instanced map
   `refuge tp w2` (map 2).
 - **Debug logging** for chat parsing and quick-tp, gated behind the existing `debugMode` flag.
 
+## Notes de version
+
+Historique des modifications par version (branche **26.1.2**). Nom du jar :
+`zombiezcompanionV2-<version_minecraft>-<version_mod>`.
+
+### 1.2.0
+- **Amis / groupe** (nouveau module `friends`, catégorie Joueurs, ON par défaut) : ajoute d'autres
+  porteurs du mod **par pseudo** (champ texte) ou depuis la liste des joueurs en ligne, avec demande +
+  acceptation ; coche par ami qui tu veux voir, et **TP vers un ami** via le refuge le plus proche
+  (même mécanisme que les events WB/Marchand).
+- **Voir ses amis** (même monde uniquement) : au-delà de 100 blocs, un **waypoint mobile** visible à
+  travers les murs ; en deçà, un **point HUD** discret avec le pseudo.
+- Côté réseau : `/presence` transporte désormais `y`, la dimension et l'UUID de compte ; nouveaux
+  endpoints `/friends/*`. La position n'est renvoyée que **quand le joueur bouge** (≥ 3 blocs) ou change
+  de map, avec un simple *heartbeat* toutes les ~90 s — économe pour le quota gratuit Cloudflare.
+
+### 1.1.0
+- **Capteur de mutants** (nouveau module `mob_sensor`, catégorie Événements, OFF par défaut) :
+  met en avant les mutants du profané via un **contour ESP violet** (espace écran, visible à
+  travers les murs) et un **compteur HUD** (nombre + distance du plus proche). Portée réglable 32–100.
+- **Stats d'intervalle de spawn** (World Boss / Marchand) : le timer affiche désormais
+  « dernier Xm · intervalle A–Bm », estimé localement depuis l'historique synchronisé. Côté
+  backend : `SPAWN_CAP` porté à 200 et nouvel endpoint `GET /spawns/stats` (min/max/médiane).
+- **Palette de couleurs** : écran « Couleurs » permettant de cycler la couleur de chaque
+  élément d'affichage (cadre mutant, World Boss, Marchand, Faille, etc.), clic droit = défaut.
+
+### 1.0.3
+- Bascule sur le **backend live** (Cloudflare Worker) : présence, spawns, leaderboard et feedback.
+- **Feedback jusqu'à 5000 caractères**, redirigé vers Discord (découpage automatique en messages).
+
+### 1.0.1
+- **Migration Minecraft 1.21.4 → 26.1.2** et rebrand **« Zombiez Companion V2 »**
+  (id `zombiezcompanionv2`).
+- **Nettoyage** : retrait des modules redondants avec les launchers (zoom, minimap, luminosité,
+  coordonnées).
+- **Bascule d'infrastructure** de l'ancien mainteneur (Keoz) vers le mainteneur actuel.
+
 ## Repository layout
 
-- `src/main/java` — mod sources (Yarn-named).
+- `src/main/java` — mod sources (official Mojang mappings).
 - `src/main/resources` — `fabric.mod.json`, mixins, lang files, and map tile assets.
 - `patch-kit/` — reference material used for the rewrite (diagnostic notes and the
   decompiled sources of the original 1.0.2 build).

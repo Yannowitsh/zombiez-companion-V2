@@ -29,6 +29,9 @@ Thumbs.db
 IDEAS.md
 latest.log
 
+# Local build archive (kept for personal version history, never committed)
+Versions/
+
 # Cloudflare Worker (backend) — local cache / deps / dev secrets
 backend/.wrangler/
 backend/node_modules/

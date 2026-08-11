@@ -33,6 +33,7 @@ public final class ModConfig {
     public SkullsConfig skulls = new SkullsConfig();
     public TelemetryConfig telemetry = new TelemetryConfig();
     public PlayersConfig players = new PlayersConfig();
+    public FriendsConfig friends = new FriendsConfig();
     public CoordinatesConfig coordinates = new CoordinatesConfig();
     public ConsumablesConfig consumables = new ConsumablesConfig();
     public ColorsConfig colors = new ColorsConfig();

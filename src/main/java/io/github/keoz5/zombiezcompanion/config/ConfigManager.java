@@ -137,6 +137,12 @@ public final class ConfigManager {
         if (cfg.players == null) {
             cfg.players = new PlayersConfig();
         }
+        if (cfg.friends == null) {
+            cfg.friends = new FriendsConfig();
+        }
+        if (cfg.friends.hidden == null) {
+            cfg.friends.hidden = new ArrayList<String>();
+        }
         if (cfg.coordinates == null) {
             cfg.coordinates = new CoordinatesConfig();
         }
