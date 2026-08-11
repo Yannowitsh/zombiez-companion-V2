@@ -26,6 +26,7 @@ import io.github.keoz5.zombiezcompanion.modules.stats.StatsModule;
 import io.github.keoz5.zombiezcompanion.modules.telemetry.TelemetryModule;
 import io.github.keoz5.zombiezcompanion.ui.ConfigScreen;
 import io.github.keoz5.zombiezcompanion.ui.StatsScreen;
+import io.github.keoz5.zombiezcompanion.update.UpdateChecker;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
@@ -37,7 +38,10 @@ import net.fabricmc.fabric.api.client.rendering.v1.hud.HudElementRegistry;
 import net.minecraft.resources.Identifier;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.Font;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.network.chat.Component;
 
 public final class ZombieZCompanionClient
 implements ClientModInitializer {
@@ -134,7 +138,9 @@ implements ClientModInitializer {
 
     private void registerFabricHooks() {
         ClientTickEvents.END_CLIENT_TICK.register(moduleManager::onClientTick);
+        ClientTickEvents.END_CLIENT_TICK.register(client -> UpdateChecker.tick());
         HudElementRegistry.addLast(Identifier.fromNamespaceAndPath("zombiezcompanion", "hud"), (drawContext, deltaTracker) -> moduleManager.onHudRender(drawContext, deltaTracker.getGameTimeDeltaPartialTick(true)));
+        HudElementRegistry.addLast(Identifier.fromNamespaceAndPath("zombiezcompanion", "update_banner"), (drawContext, deltaTracker) -> ZombieZCompanionClient.renderUpdateBanner(drawContext));
         ClientReceiveMessageEvents.CHAT.register((message, signed, sender, params, timestamp) -> moduleManager.onChatMessage(message, false));
         ClientReceiveMessageEvents.GAME.register((message, overlay) -> {
             if (!overlay) {
@@ -146,6 +152,24 @@ implements ClientModInitializer {
             moduleManager.onLeaveWorld();
             configManager.save();
         });
+    }
+
+    private static void renderUpdateBanner(GuiGraphicsExtractor ctx) {
+        if (!UpdateChecker.available()) {
+            return;
+        }
+        Minecraft mc = Minecraft.getInstance();
+        if (mc.player == null || mc.screen != null || mc.options.hideGui) {
+            return;
+        }
+        Component line = Component.translatable((String)"zombiezcompanion.update.hud", (Object[])new Object[]{UpdateChecker.latestVersion()});
+        Font f = mc.font;
+        int w = f.width((net.minecraft.network.chat.FormattedText)line) + 16;
+        int x = (ctx.guiWidth() - w) / 2;
+        int y = 4;
+        ctx.fill(x, y, x + w, y + 14, -1442840576);
+        ctx.fill(x, y, x + w, y + 1, -256);
+        ctx.text(f, (Component)line, x + 8, y + 3, -256, false);
     }
 
     private static void tpToEventRefuge() {

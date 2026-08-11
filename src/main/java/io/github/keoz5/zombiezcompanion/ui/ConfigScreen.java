@@ -22,6 +22,9 @@ import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.components.events.GuiEventListener;
+import io.github.keoz5.zombiezcompanion.update.UpdateChecker;
+import io.github.keoz5.zombiezcompanion.update.UpdateProgressScreen;
+import net.minecraft.client.gui.screens.ConfirmScreen;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.FormattedText;
@@ -120,10 +123,39 @@ extends Screen {
             }
         }, -266723542, -265932737, -854792));
         this.addRenderableWidget(new StyledButton(this.panelX2 - 12 - 92, btnY, 92, btnH, (Component)Component.translatable((String)"zombiezcompanion.button.close"), btn -> this.onClose(), -266723542, -265932737, -854792));
+        if (UpdateChecker.available()) {
+            int titleX = this.panelX1 + 42;
+            int vw = this.font.width((FormattedText)Component.translatable((String)"zombiezcompanion.header.version", (Object[])new Object[]{ConfigScreen.currentVersion()}));
+            this.addRenderableWidget(new StyledButton(titleX + vw + 22, this.titleY1 + 16, 116, 15, (Component)Component.translatable((String)"zombiezcompanion.update.button"), btn -> this.openUpdate(), -14709924, -14179731, -854792));
+        }
+        this.lastUpdateAvail = UpdateChecker.available();
     }
 
     private static String categoryLabel(ModuleCategory category) {
         return Component.translatable((String)("zombiezcompanion.category." + category.name().toLowerCase(Locale.ROOT))).getString();
+    }
+
+    private boolean lastUpdateAvail;
+
+    @Override
+    public void tick() {
+        super.tick();
+        if (UpdateChecker.available() != this.lastUpdateAvail) {
+            this.rebuildWidgets();
+        }
+    }
+
+    private void openUpdate() {
+        if (this.minecraft == null) {
+            return;
+        }
+        this.minecraft.setScreen((Screen)new ConfirmScreen(confirmed -> {
+            if (confirmed) {
+                this.minecraft.setScreen((Screen)new UpdateProgressScreen(this));
+            } else {
+                this.minecraft.setScreen((Screen)this);
+            }
+        }, (Component)Component.translatable((String)"zombiezcompanion.update.confirm.title"), (Component)Component.translatable((String)"zombiezcompanion.update.confirm.msg", (Object[])new Object[]{UpdateChecker.latestVersion()})));
     }
 
     private void computePanelRect() {
@@ -329,6 +361,9 @@ extends Screen {
         ctx.fill(titleX + vw + 11, this.titleY1 + 20, titleX + vw + 12, this.titleY1 + 28, -14867392);
         ctx.fill(titleX + 1, this.titleY1 + 19, titleX + vw + 11, this.titleY1 + 20, -8874241);
         ctx.text(this.font, (Component)version, titleX + 5, this.titleY1 + 21, -8874241, false);
+        if (UpdateChecker.checked() && !UpdateChecker.available()) {
+            ctx.text(this.font, (Component)Component.translatable((String)"zombiezcompanion.update.uptodate"), titleX + vw + 22, this.titleY1 + 21, 0xFF7FDD6E, false);
+        }
         ctx.enableScissor(this.panelX1, this.contentY1, this.panelX2, this.contentY2);
         long elapsedG = System.currentTimeMillis() - this.openedAt;
         for (int i = 0; i < this.cards.size(); ++i) {

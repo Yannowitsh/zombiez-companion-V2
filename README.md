@@ -43,6 +43,14 @@ This is a full rewrite that adds support for the server's second, instanced map
 Historique des modifications par version (branche **26.1.2**). Nom du jar :
 `zombiezcompanionV2-<version_minecraft>-<version_mod>`.
 
+### 1.4.0
+- **Mise à jour intégrée** : le mod vérifie **toutes les minutes** s'il existe une version plus récente
+  (manifeste `update.json` par branche sur GitHub, choisi selon la version Minecraft). Dans le menu, à
+  côté de la version : un indicateur **« à jour »** ou un bouton **« METTRE À JOUR »** ; en jeu, un petit
+  **bandeau** prévient. Le bouton demande confirmation (fermeture du jeu nécessaire), télécharge le
+  nouveau jar dans `zzc-updates/` et ouvre le dossier — il ne reste qu'à remplacer l'ancien jar dans
+  `mods/` et relancer.
+
 ### 1.3.0
 - **Traqueur de mobs custom** (ancien « Capteur de mutants », module `mob_sensor`) : **5 slots de texte**
   où écrire un nom (ou bout de nom) de mob à surligner, chacun avec une **case on/off**. Recherche « au
