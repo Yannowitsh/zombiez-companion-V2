@@ -12,6 +12,7 @@ import io.github.keoz5.zombiezcompanion.modules.map.WaypointsModule;
 import io.github.keoz5.zombiezcompanion.modules.map.ZombieZDetector;
 import io.github.keoz5.zombiezcompanion.modules.telemetry.PresenceCache;
 import io.github.keoz5.zombiezcompanion.net.HttpClients;
+import io.github.keoz5.zombiezcompanion.ui.Colors;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import java.net.URI;
@@ -27,6 +28,7 @@ import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import net.minecraft.client.Camera;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.player.AbstractClientPlayer;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.screens.Screen;
@@ -43,7 +45,13 @@ public final class FriendsModule
 implements Module {
     public static final String ID = "friends";
     private static final long POLL_MS = 15000L;
-    private static final int FRIEND_COLOR = 0xFF33C1FF;
+    /** Default marker tint; per-friend overrides live in {@link Colors} under id {@code "friend:"+uuid}. */
+    public static final int FRIEND_COLOR = 0xFF33C1FF;
+
+    /** Per-friend marker color (the player's override, or the default tint). */
+    public static int colorOf(String uuid) {
+        return Colors.get("friend:" + uuid, FRIEND_COLOR);
+    }
 
     private ConfigManager configManager;
     private long nextPollMs;
@@ -352,49 +360,159 @@ implements Module {
         String playerDim = client.level != null ? client.level.dimension().identifier().toString() : "";
         Set<String> hidden = new HashSet<String>(cfg.hidden);
         int near = Math.max(0, cfg.nearHudRange);
+        String style = cfg.markerStyle == null ? "auto" : cfg.markerStyle;
         for (FriendsCache.Friend f : FriendsCache.friends()) {
+            double tx, ty, tz;
             if (hidden.contains(f.uuid())) continue;
-            PresenceCache.Presence p = FriendsModule.onlinePresence(f.uuid());
-            if (p == null) continue;
-            if (!playerDim.isEmpty() && !p.dim().isEmpty() && !playerDim.equals(p.dim())) continue;
-            double dist = Math.sqrt(client.player.distanceToSqr(p.x(), p.y(), p.z()));
-            if (dist >= (double)near) {
-                WaypointsModule.renderScreenBeacon(ctx, client, tickDelta, p.x(), p.y(), p.z(), f.name(), FRIEND_COLOR);
+            // Prefer the friend's real loaded entity (instant, client-side, no server round-trip); fall back to
+            // the presence snapshot only when they are out of render distance / not loaded.
+            AbstractClientPlayer ent = FriendsModule.loadedPlayer(client, f.uuid());
+            boolean loaded = ent != null;
+            if (loaded) {
+                tx = ent.xo + (ent.getX() - ent.xo) * (double)tickDelta;
+                ty = ent.yo + (ent.getY() - ent.yo) * (double)tickDelta;
+                tz = ent.zo + (ent.getZ() - ent.zo) * (double)tickDelta;
             } else {
-                FriendsModule.renderNearDot(ctx, client, p, f.name());
+                PresenceCache.Presence p = FriendsModule.onlinePresence(f.uuid());
+                if (p == null) continue;
+                if (!playerDim.isEmpty() && !p.dim().isEmpty() && !playerDim.equals(p.dim())) continue;
+                tx = p.x();
+                ty = p.y();
+                tz = p.z();
+            }
+            double dist = Math.sqrt(client.player.distanceToSqr(tx, ty, tz));
+            int color = FriendsModule.colorOf(f.uuid());
+            int solid = 0xFF000000 | (color & 0xFFFFFF);
+            boolean farStyle = "waypoint".equals(style) || dist >= (double)near;
+            if (farStyle) {
+                WaypointsModule.renderScreenBeacon(ctx, client, tickDelta, tx, ty, tz, f.name(), solid);
+            } else if ("box".equals(style) && loaded) {
+                FriendsModule.renderEntityBox(ctx, client, tx, ty, tz, ent.getBbHeight(), dist, f.name(), color);
+            } else {
+                FriendsModule.renderCompactMarker(ctx, client, tx, ty, tz, dist, f.name(), solid);
             }
         }
     }
 
-    /** Compact marker for a nearby friend: a small dot at the projected position plus their name. */
-    private static void renderNearDot(GuiGraphicsExtractor ctx, Minecraft client, PresenceCache.Presence p, String name) {
+    /** The friend's real, currently-loaded client entity (by account UUID), or null if out of render distance. */
+    private static AbstractClientPlayer loadedPlayer(Minecraft client, String mcuuid) {
+        if (client.level == null || mcuuid == null) {
+            return null;
+        }
+        for (AbstractClientPlayer pl : client.level.players()) {
+            if (pl == client.player || pl.isRemoved()) continue;
+            if (mcuuid.equals(pl.getUUID().toString())) {
+                return pl;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Compact, always-visible marker for a nearby friend: edge-clamped like the waypoint (never disappears
+     * when the friend is off-screen or behind the camera), drawn as a small diamond + "name [dist]" — no big box.
+     */
+    private static void renderCompactMarker(GuiGraphicsExtractor ctx, Minecraft client, double wx, double wy, double wz, double dist, String name, int color) {
+        if (client.gameRenderer == null) {
+            return;
+        }
         Camera camera = client.gameRenderer.getMainCamera();
         int screenW = ctx.guiWidth();
         int screenH = ctx.guiHeight();
-        double[] s = FriendsModule.project(camera, screenW, screenH, p.x(), p.y() + 2.2, p.z());
-        if (s == null) {
-            return;
-        }
-        int x = (int)Math.round(s[0]);
-        int y = (int)Math.round(s[1]);
-        int r = 4;
-        for (int dy = -r; dy <= r; ++dy) {
-            int half = r - Math.abs(dy);
-            ctx.fill(x - half, y + dy, x + half + 1, y + dy + 1, FRIEND_COLOR);
-        }
-        ctx.outline(x - r - 1, y - r - 1, 2 * r + 3, 2 * r + 3, 0x80000000);
+        int[] s = FriendsModule.projectClamped(camera, screenW, screenH, wx, wy + 1.45, wz);
+        int x = s[0];
+        int y = s[1];
+        int r = 5;
+        FriendsModule.drawDiamond(ctx, x, y, r + 1, 0xC0000000);
+        FriendsModule.drawDiamond(ctx, x, y, r, color);
+        ctx.fill(x - 1, y - 1, x + 2, y + 2, 0xFFFFFFFF);
         Font tr = client.font;
-        String label = name == null ? "?" : name;
+        String label = (name == null ? "?" : name) + " [" + (int)Math.round(dist) + "m]";
         int w = tr.width(label);
-        ctx.text(tr, (Component)Component.literal((String)label), x - w / 2, y - r - 12, FRIEND_COLOR);
+        int tx = (int)Math.max(2, Math.min(screenW - w - 2, x - w / 2));
+        ctx.text(tr, (Component)Component.literal((String)label), tx, y - r - 12, color);
     }
 
-    /** Projects a world point to screen coordinates, or null if it is behind the camera. */
-    private static double[] project(Camera camera, int screenW, int screenH, double wx, double wy, double wz) {
+    /**
+     * Framed marker ("box" style) for a nearby friend: a screen-space rectangle over the player's hitbox,
+     * edge-clamped so it never disappears. Height is measured from the projected hitbox when in view.
+     */
+    private static void renderEntityBox(GuiGraphicsExtractor ctx, Minecraft client, double footX, double footY, double footZ, double height, double dist, String name, int color) {
+        if (client.gameRenderer == null) {
+            return;
+        }
+        Camera camera = client.gameRenderer.getMainCamera();
+        int screenW = ctx.guiWidth();
+        int screenH = ctx.guiHeight();
+        int[] c = FriendsModule.projectClamped(camera, screenW, screenH, footX, footY + height / 2.0, footZ);
+        double[] top = FriendsModule.projectRaw(camera, screenW, screenH, footX, footY + height + 0.15, footZ);
+        double[] bot = FriendsModule.projectRaw(camera, screenW, screenH, footX, footY, footZ);
+        double h = top != null && bot != null ? Math.max(12.0, Math.abs(bot[1] - top[1])) : 22.0;
+        double w = Math.max(10.0, h * 0.6);
+        int x1 = (int)Math.round((double)c[0] - w / 2.0);
+        int x2 = (int)Math.round((double)c[0] + w / 2.0);
+        int y1 = (int)Math.round((double)c[1] - h / 2.0);
+        int y2 = (int)Math.round((double)c[1] + h / 2.0);
+        int frameCol = 0xFF000000 | (color & 0xFFFFFF);
+        int fillCol = 0x30000000 | (color & 0xFFFFFF);
+        ctx.fill(x1, y1, x2, y2, fillCol);
+        ctx.outline(x1 - 1, y1 - 1, x2 - x1 + 2, y2 - y1 + 2, 0x80000000);
+        ctx.outline(x1, y1, x2 - x1, y2 - y1, frameCol);
+        Font tr = client.font;
+        String label = (name == null ? "?" : name) + " [" + (int)Math.round(dist) + "m]";
+        int lw = tr.width(label);
+        int tx = (int)Math.max(2, Math.min(screenW - lw - 2, (double)c[0] - (double)lw / 2.0));
+        ctx.text(tr, (Component)Component.literal((String)label), tx, y1 - 11, frameCol);
+    }
+
+    private static void drawDiamond(GuiGraphicsExtractor ctx, int x, int y, int radius, int color) {
+        for (int dy = -radius; dy <= radius; ++dy) {
+            int half = radius - Math.abs(dy);
+            ctx.fill(x - half, y + dy, x + half + 1, y + dy + 1, color);
+        }
+    }
+
+    /** Projects a world point to an edge-clamped screen position that never disappears (even behind the camera). */
+    private static int[] projectClamped(Camera camera, int screenW, int screenH, double wx, double wy, double wz) {
         Vec3 cam = camera.position();
         Vec3 to = new Vec3(wx - cam.x, wy - cam.y, wz - cam.z);
         Vec3 forward = Vec3.directionFromRotation((float)camera.xRot(), (float)camera.yaw()).normalize();
-        Vec3 right = Vec3.directionFromRotation((float)0.0f, (float)(camera.yaw() + 90.0f)).normalize();
+        Vec3 right = Vec3.directionFromRotation(0.0f, (float)(camera.yaw() + 90.0f)).normalize();
+        Vec3 up = right.cross(forward).normalize();
+        double depth = to.dot(forward);
+        double xCam = to.dot(right);
+        double yCam = to.dot(up);
+        double vfov = Math.toRadians(Math.max(12.0, Math.min(110.0, camera.getFov())));
+        double aspect = (double)screenW / Math.max(1.0, (double)screenH);
+        double xNorm;
+        double yNorm;
+        if (depth > 0.05) {
+            double halfH = Math.tan(vfov / 2.0) * depth;
+            double halfW = halfH * aspect;
+            xNorm = xCam / Math.max(0.001, halfW);
+            yNorm = yCam / Math.max(0.001, halfH);
+        } else {
+            double absX = Math.abs(xCam);
+            xNorm = absX < 0.001 ? 0.0 : Math.signum(xCam) * Math.min(1.0, 0.4 + absX / Math.max(1.0, absX + 8.0));
+            yNorm = -1.0;
+        }
+        double edgeScale = Math.max(1.0, Math.max(Math.abs(xNorm), Math.abs(yNorm)));
+        xNorm /= edgeScale;
+        yNorm /= edgeScale;
+        xNorm = Math.max(-0.96, Math.min(0.96, xNorm));
+        yNorm = Math.max(-0.9, Math.min(0.9, yNorm));
+        int margin = 14;
+        int x = (int)Math.max(margin, Math.min(screenW - margin, (int)Math.round((double)screenW / 2.0 + xNorm * (double)screenW / 2.0)));
+        int y = (int)Math.max(margin, Math.min(screenH - margin, (int)Math.round((double)screenH / 2.0 - yNorm * (double)screenH / 2.0)));
+        return new int[]{x, y};
+    }
+
+    /** Raw projection to screen coordinates, or null when the point is behind the camera. Used to size the box. */
+    private static double[] projectRaw(Camera camera, int screenW, int screenH, double wx, double wy, double wz) {
+        Vec3 cam = camera.position();
+        Vec3 to = new Vec3(wx - cam.x, wy - cam.y, wz - cam.z);
+        Vec3 forward = Vec3.directionFromRotation((float)camera.xRot(), (float)camera.yaw()).normalize();
+        Vec3 right = Vec3.directionFromRotation(0.0f, (float)(camera.yaw() + 90.0f)).normalize();
         Vec3 up = right.cross(forward).normalize();
         double depth = to.dot(forward);
         if (depth <= 0.05) {
@@ -406,10 +524,8 @@ implements Module {
         double aspect = (double)screenW / Math.max(1.0, (double)screenH);
         double halfH = Math.tan(vfov / 2.0) * depth;
         double halfW = halfH * aspect;
-        double xNorm = xCam / Math.max(0.001, halfW);
-        double yNorm = yCam / Math.max(0.001, halfH);
-        double sx = (double)screenW / 2.0 + xNorm * (double)screenW / 2.0;
-        double sy = (double)screenH / 2.0 - yNorm * (double)screenH / 2.0;
+        double sx = (double)screenW / 2.0 + xCam / Math.max(0.001, halfW) * (double)screenW / 2.0;
+        double sy = (double)screenH / 2.0 - yCam / Math.max(0.001, halfH) * (double)screenH / 2.0;
         return new double[]{sx, sy};
     }
 

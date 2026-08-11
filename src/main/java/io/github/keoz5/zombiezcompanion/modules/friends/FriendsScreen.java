@@ -3,8 +3,11 @@ package io.github.keoz5.zombiezcompanion.modules.friends;
 import io.github.keoz5.zombiezcompanion.config.ConfigManager;
 import io.github.keoz5.zombiezcompanion.config.FriendsConfig;
 import io.github.keoz5.zombiezcompanion.modules.telemetry.PresenceCache;
+import io.github.keoz5.zombiezcompanion.ui.ColorPickerScreen;
+import io.github.keoz5.zombiezcompanion.ui.Colors;
 import io.github.keoz5.zombiezcompanion.ui.ModuleOptionsScreen;
 import io.github.keoz5.zombiezcompanion.ui.widget.StyledButton;
+import io.github.keoz5.zombiezcompanion.ui.widget.StyledSlider;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -50,6 +53,22 @@ extends ModuleOptionsScreen {
 
         // Master render toggle.
         this.addToggle(x, y, 220, (Component)Component.translatable((String)"zombiezcompanion.friends.toggle.show"), () -> this.config().showFriends, v -> this.config().showFriends = v);
+        y += 30;
+
+        // Near/far threshold: at/above it a friend shows as the full labeled waypoint; below it, the near marker.
+        this.addRenderableWidget(new StyledSlider(x, y, w, 22, this.config().nearHudRange, 20.0, 500.0, v -> {
+            this.config().nearHudRange = (int)Math.round(v);
+            this.configManager.save();
+        }, v -> Component.translatable((String)"zombiezcompanion.friends.slider.near_range", (Object[])new Object[]{(int)Math.round(v)})));
+        y += 30;
+
+        // Global marker style (cycles auto -> waypoint -> box).
+        this.addRenderableWidget(new StyledButton(x, y, 220, 22, FriendsScreen.styleLabel(this.config().markerStyle), b -> {
+            String next = FriendsScreen.nextStyle(this.config().markerStyle);
+            this.config().markerStyle = next;
+            this.configManager.save();
+            b.setMessage(FriendsScreen.styleLabel(next));
+        }, GREY_A, GREY_B, TEXT));
         y += 30;
 
         Set<String> friendIds = new HashSet<String>();
@@ -98,8 +117,13 @@ extends ModuleOptionsScreen {
                 boolean online = p != null;
                 // "Voir" toggle.
                 this.button(x, y, 62, 18, (Component)Component.translatable((String)(visible ? "zombiezcompanion.friends.see.on" : "zombiezcompanion.friends.see.off")), b -> this.moduleRef.setVisible(uuid, !visible), visible ? GREEN_A : GREY_A, visible ? GREEN_B : GREY_B);
-                this.labels.add(new Label((Component)Component.literal((String)f.name()), x + 68, y + 5, TEXT));
-                this.labels.add(new Label(this.statusText(mc, p, playerDim), x + 68, y + 5 + 11, online ? MUTED : 0xFF6A7079));
+                // Per-friend color swatch (the button itself shows the color and opens the full picker).
+                int swatch = 0xFF000000 | (FriendsModule.colorOf(uuid) & 0xFFFFFF);
+                this.addRenderableWidget(new StyledButton(x + 68, y, 18, 18, (Component)Component.empty(), b -> {
+                    if (this.minecraft != null) this.minecraft.setScreen((Screen)new ColorPickerScreen(this, this.configManager, new Colors.Element("friend:" + uuid, "zombiezcompanion.friends.color.pick", FriendsModule.FRIEND_COLOR)));
+                }, swatch, swatch, TEXT));
+                this.labels.add(new Label((Component)Component.literal((String)f.name()), x + 90, y + 5, TEXT));
+                this.labels.add(new Label(this.statusText(mc, p, playerDim), x + 90, y + 5 + 11, online ? MUTED : 0xFF6A7079));
                 if (online) {
                     this.button(right - 56, y, 56, 18, (Component)Component.translatable((String)"zombiezcompanion.friends.btn.tp"), b -> { if (this.minecraft != null) this.minecraft.setScreen((Screen)null); FriendsModule.tpTo(p); }, BLUE_A, BLUE_B);
                 }
@@ -197,6 +221,17 @@ extends ModuleOptionsScreen {
 
     private static Component toggleLabel(Component label, boolean enabled) {
         return Component.translatable((String)"zombiezcompanion.toggle.format", (Object[])new Object[]{label, Component.translatable((String)(enabled ? "zombiezcompanion.state.on" : "zombiezcompanion.state.off"))});
+    }
+
+    private static String nextStyle(String style) {
+        if ("auto".equals(style)) return "waypoint";
+        if ("waypoint".equals(style)) return "box";
+        return "auto";
+    }
+
+    private static Component styleLabel(String style) {
+        String s = "waypoint".equals(style) || "box".equals(style) ? style : "auto";
+        return Component.translatable((String)"zombiezcompanion.friends.style.label", (Object[])new Object[]{Component.translatable((String)("zombiezcompanion.friends.style." + s))});
     }
 
     @Override

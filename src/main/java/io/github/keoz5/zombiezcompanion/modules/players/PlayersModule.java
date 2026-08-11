@@ -36,8 +36,8 @@ public final class PlayersModule
 implements Module {
     public static final String ID = "players";
     private static final String ENDPOINT = ModInfo.API_BASE;
-    private static final long PRESENCE_INTERVAL_MS = 10000L;
-    private static final long PRESENCE_REFRESH_MS = 5000L;
+    private static final long PRESENCE_INTERVAL_MS = 5000L;
+    private static final long PRESENCE_REFRESH_MS = 2000L;
     private static final long LEADERBOARD_INTERVAL_MS = 60000L;
     // Free-tier KV write budget: only broadcast on real movement, with a heartbeat to keep the 120s TTL alive.
     private static final double PRESENCE_MOVE_THRESHOLD = 3.0;
@@ -144,7 +144,7 @@ implements Module {
         }
         if ((this.configManager.get().map.showModUsers || FriendsModule.wantsPresenceRefresh()) && now >= this.nextRefreshMs) {
             this.refreshPresences();
-            this.nextRefreshMs = now + 5000L;
+            this.nextRefreshMs = now + PRESENCE_REFRESH_MS;
         }
         if (cfg.broadcastPosition && now >= this.nextLeaderboardMs) {
             this.sendLeaderboard(client);
