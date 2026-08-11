@@ -96,6 +96,7 @@ implements ClientModInitializer {
         HudElements.register("lure_timer", "zombiezcompanion.hud.element.lure_timer", 110, 18, 0.0, 0.42, true);
         HudElements.register("flower_timer", "zombiezcompanion.hud.element.flower_timer", 150, 18, 0.0, 0.48, true);
         HudElements.register("mutant_sensor", "zombiezcompanion.hud.element.mutant_sensor", 140, 16, 0.0, 0.54, true);
+        HudElements.register("auto_text_bar", "zombiezcompanion.hud.element.auto_text_bar", 100, 22, 0.01, 0.30, false);
     }
 
     /**
