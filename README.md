@@ -43,6 +43,9 @@ This is a full rewrite that adds support for the server's second, instanced map
 Historique des modifications par version (branche **26.1.2**). Nom du jar :
 `zombiezcompanionV2-<version_minecraft>-<version_mod>`.
 
+### 1.4.1
+- Version de validation de la **mise à jour intégrée** (aucun changement de gameplay).
+
 ### 1.4.0
 - **Mise à jour intégrée** : le mod vérifie **toutes les minutes** s'il existe une version plus récente
   (manifeste `update.json` par branche sur GitHub, choisi selon la version Minecraft). Dans le menu, à
