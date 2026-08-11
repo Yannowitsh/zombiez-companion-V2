@@ -21,6 +21,11 @@ repositories {
 		name = 'TerraformersMC'
 		url = 'https://maven.terraformersmc.com/releases'
 	}
+	// DevAuth: real Microsoft login in the dev client so runClient can join online servers.
+	maven {
+		name = 'DevAuth'
+		url = 'https://pkgs.dev.azure.com/djtheredstoner/DevAuth/_packaging/public/maven/v1'
+	}
 }
 
 dependencies {
@@ -35,6 +40,20 @@ dependencies {
 
 	// Optional ModMenu integration (suggested, not required at runtime).
 	compileOnly "com.terraformersmc:modmenu:${project.modmenu_version}"
+
+	// Dev-only: authenticates the runClient session with a real Microsoft account
+	// (non-remap pipeline => plain runtimeOnly, like the other runtime deps above).
+	runtimeOnly "me.djtheredstoner:DevAuth-fabric:1.2.2"
+}
+
+// Enable DevAuth automatically for the dev client so it performs the Microsoft
+// OAuth device-code flow on first launch (it defaults to disabled otherwise).
+loom {
+	runs {
+		client {
+			property "devauth.enabled", "true"
+		}
+	}
 }
 
 processResources {
