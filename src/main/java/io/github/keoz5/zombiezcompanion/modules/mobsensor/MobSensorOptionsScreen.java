@@ -5,7 +5,9 @@ import io.github.keoz5.zombiezcompanion.config.MobSensorConfig;
 import io.github.keoz5.zombiezcompanion.ui.ModuleOptionsScreen;
 import io.github.keoz5.zombiezcompanion.ui.widget.StyledButton;
 import io.github.keoz5.zombiezcompanion.ui.widget.StyledSlider;
+import java.util.List;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 
@@ -14,6 +16,7 @@ extends ModuleOptionsScreen {
     private final MobSensorModule moduleRef;
     private int optY;
     private int rangeY;
+    private int slotsY;
 
     public MobSensorOptionsScreen(Screen parent, MobSensorModule module, ConfigManager configManager) {
         super(parent, module, configManager);
@@ -37,6 +40,24 @@ extends ModuleOptionsScreen {
         this.addRenderableWidget(new StyledSlider(x, this.rangeY + 14, optionW, 22, this.config().detectionRange, 32.0, 100.0, v -> {
             this.config().detectionRange = (int)Math.round(v);
         }, v -> Component.translatable((String)"zombiezcompanion.mob_sensor.slider.range", (Object[])new Object[]{(int)Math.round(v)})));
+        this.slotsY = this.rangeY + 44;
+        List<MobSensorConfig.Track> tracks = this.config().tracks;
+        int toggleW = 92;
+        int boxW = Math.max(80, optionW - toggleW - gap);
+        for (int i = 0; i < MobSensorConfig.SLOTS && i < tracks.size(); ++i) {
+            int y = this.slotsY + 14 + i * 24;
+            MobSensorConfig.Track track = tracks.get(i);
+            EditBox box = new EditBox(this.font, x, y, boxW, 18, (Component)Component.translatable((String)"zombiezcompanion.mob_sensor.slot.hint"));
+            box.setMaxLength(32);
+            box.setValue(track.query == null ? "" : track.query);
+            box.setResponder(s -> {
+                track.query = s;
+            });
+            this.addRenderableWidget(box);
+            this.addToggle(x + boxW + gap, y, (Component)Component.translatable((String)"zombiezcompanion.mob_sensor.slot.enable"), toggleW, () -> track.enabled, v -> {
+                track.enabled = v;
+            });
+        }
     }
 
     private void addToggle(int x, int y, Component label, int w, BoolGetter getter, BoolSetter setter) {
@@ -63,7 +84,8 @@ extends ModuleOptionsScreen {
         ctx.text(this.font, (Component)Component.translatable((String)"zombiezcompanion.mob_sensor.options.header"), x, this.contentY1 + 12, -854792);
         ctx.text(this.font, (Component)Component.translatable((String)"zombiezcompanion.mob_sensor.section.display"), x, this.optY - 14, -8874241, false);
         ctx.text(this.font, (Component)Component.translatable((String)"zombiezcompanion.mob_sensor.section.range"), x, this.rangeY, -8874241, false);
-        ctx.text(this.font, (Component)Component.translatable((String)"zombiezcompanion.mob_sensor.options.hint"), x, this.rangeY + 44, -8353376, false);
+        ctx.text(this.font, (Component)Component.translatable((String)"zombiezcompanion.mob_sensor.section.slots"), x, this.slotsY, -8874241, false);
+        ctx.text(this.font, (Component)Component.translatable((String)"zombiezcompanion.mob_sensor.options.hint"), x, this.slotsY + 14 + MobSensorConfig.SLOTS * 24, -8353376, false);
     }
 
     @Override
@@ -71,12 +93,14 @@ extends ModuleOptionsScreen {
         int x = this.panelX1 + 24;
         int y = this.contentY1 + 18;
         int w = this.panelX2 - this.panelX1 - 48;
-        int h = 150;
+        int h = 262;
         ctx.fill(x + 2, y + 3, x + w + 2, y + h + 3, -1442840576);
         ctx.fill(x, y, x + w, y + h, -267053025);
         ctx.fill(x, y, x + w, y + 2, -8874241);
         int divY = this.rangeY - 8;
         ctx.fill(x + 12, divY, x + w - 12, divY + 1, -14736594);
+        int divY2 = this.slotsY - 8;
+        ctx.fill(x + 12, divY2, x + w - 12, divY2 + 1, -14736594);
         ctx.outline(x, y, w, h, -14736594);
     }
 

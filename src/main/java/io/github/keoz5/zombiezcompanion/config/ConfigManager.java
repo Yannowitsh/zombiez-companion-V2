@@ -125,6 +125,17 @@ public final class ConfigManager {
         if (cfg.mobSensor == null) {
             cfg.mobSensor = new MobSensorConfig();
         }
+        if (cfg.mobSensor.tracks == null || cfg.mobSensor.tracks.isEmpty()) {
+            cfg.mobSensor.tracks = MobSensorConfig.defaultTracks();
+        }
+        while (cfg.mobSensor.tracks.size() < MobSensorConfig.SLOTS) {
+            cfg.mobSensor.tracks.add(new MobSensorConfig.Track());
+        }
+        for (MobSensorConfig.Track track : cfg.mobSensor.tracks) {
+            if (track != null && track.query == null) {
+                track.query = "";
+            }
+        }
         if (cfg.skulls == null) {
             cfg.skulls = new SkullsConfig();
         }

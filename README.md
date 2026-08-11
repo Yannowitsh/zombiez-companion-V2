@@ -43,6 +43,17 @@ This is a full rewrite that adds support for the server's second, instanced map
 Historique des modifications par version (branche **26.1.2**). Nom du jar :
 `zombiezcompanionV2-<version_minecraft>-<version_mod>`.
 
+### 1.3.0
+- **Traqueur de mobs custom** (ancien « Capteur de mutants », module `mob_sensor`) : **5 slots de texte**
+  où écrire un nom (ou bout de nom) de mob à surligner, chacun avec une **case on/off**. Recherche « au
+  max » : id de type, nom custom, nom affiché, tags, et texte des rigs `text_display` (les mutants du
+  profané restent trouvables via le slot **« mutant »** activé par défaut). Contour ESP + compteur HUD.
+- **Histogramme de spawn** dans **le menu du module** (Événements → Options, un par event) : distribution
+  des intervalles observés **par minute** (barres = %), avec un repère sur la médiane.
+- **« Prochain spawn probable »** (marchand / World Boss) affiché dans **le menu du module** (pas dans le HUD).
+- **Fourchette d'intervalle affinée** : filtre **bidirectionnel** (rejette aussi les intervalles trop
+  courts, pas seulement trop longs) → bornes min/max plus fiables. Historique backend porté à 500 spawns.
+
 ### 1.2.0
 - **Amis / groupe** (nouveau module `friends`, catégorie Joueurs, ON par défaut) : ajoute d'autres
   porteurs du mod **par pseudo** (champ texte) ou depuis la liste des joueurs en ligne, avec demande +

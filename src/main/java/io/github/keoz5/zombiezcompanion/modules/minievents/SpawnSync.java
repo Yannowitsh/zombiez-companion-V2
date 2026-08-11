@@ -50,7 +50,7 @@ public final class SpawnSync {
         }
         ArrayList<Long> copy = new ArrayList<Long>(src);
         copy.add(at);
-        while (copy.size() > 30) {
+        while (copy.size() > 200) {
             copy.remove(0);
         }
         if (boss) {

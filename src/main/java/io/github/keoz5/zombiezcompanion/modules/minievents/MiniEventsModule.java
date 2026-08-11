@@ -633,6 +633,75 @@ implements Module {
         ctx.pose().popMatrix();
     }
 
+    public List<Long> spawnHistory(boolean boss) {
+        return this.effectiveSpawns(boss);
+    }
+
+    public int accentColor(boolean boss) {
+        return (boss ? MiniEventType.WORLD_BOSS.color() : MiniEventType.MARCHAND.color()) | 0xFF000000;
+    }
+
+    public String intervalRangeText(boolean boss) {
+        return MiniEventsModule.intervalRange(this.effectiveSpawns(boss));
+    }
+
+    public String medianText(boolean boss) {
+        Long m = MiniEventsModule.medianFilteredInterval(this.effectiveSpawns(boss));
+        return m == null ? "—" : MiniEventsModule.fmtDuration(m);
+    }
+
+    /**
+     * Draws the interval-distribution histogram (spawn count per minute bucket, scaled to the tallest
+     * bar) within the box (ox, oy, maxW, h), plus a white tick at the median minute. Filtered intervals.
+     * Draws nothing when there are fewer than 4 filtered intervals. Used by the module's options screen.
+     */
+    static void drawSpawnHistogram(GuiGraphicsExtractor ctx, int ox, int oy, int maxW, int h, List<Long> spawns, int accent) {
+        List<Long> iv = MiniEventsModule.filteredIntervals(spawns);
+        if (iv.size() < 4) {
+            return;
+        }
+        int lo = Integer.MAX_VALUE;
+        int hi = Integer.MIN_VALUE;
+        for (long d : iv) {
+            int m = (int)(d / 60000L);
+            if (m < lo) {
+                lo = m;
+            }
+            if (m > hi) {
+                hi = m;
+            }
+        }
+        if (hi < lo) {
+            return;
+        }
+        int span = hi - lo + 1;
+        int[] counts = new int[span];
+        for (long d : iv) {
+            ++counts[(int)(d / 60000L) - lo];
+        }
+        int maxc = 1;
+        for (int c : counts) {
+            if (c > maxc) {
+                maxc = c;
+            }
+        }
+        int barW = Math.max(1, Math.min(6, maxW / span));
+        int w = span * barW;
+        int bh = h - 2;
+        ctx.fill(ox, oy, ox + w + 1, oy + h, 0x66000000);
+        for (int i = 0; i < span; ++i) {
+            if (counts[i] == 0) continue;
+            int barHeight = Math.max(1, (int)Math.round((double)counts[i] / (double)maxc * (double)(bh - 1)));
+            int bx = ox + 1 + i * barW;
+            int by = oy + 1 + (bh - barHeight);
+            ctx.fill(bx, by, bx + Math.max(1, barW - 1), oy + 1 + bh, accent);
+        }
+        long med = MiniEventsModule.medianLong(iv);
+        int medMin = (int)(med / 60000L);
+        int mx = ox + 1 + Math.max(0, Math.min(span - 1, medMin - lo)) * barW + barW / 2;
+        ctx.fill(mx, oy + 1, mx + 1, oy + 1 + bh, 0xFFFFFFFF);
+    }
+
     private static String fmtDuration(long ms) {
         long totalMin = Math.max(0L, ms) / 60000L;
         if (totalMin < 60L) {
@@ -644,14 +713,14 @@ implements Module {
     }
 
     /**
-     * Observed "min–max" interval string from the shared spawn history, or "—" when there is not
-     * enough data (need >= 3 spawns for >= 2 intervals). Mirrors the backend {@code /spawns/stats}
-     * algorithm: sort, diff consecutive spawns, then drop likely missed-spawn gaps (> 2x median)
-     * so a single hole in the capture does not inflate the maximum.
+     * Bidirectionally outlier-filtered intervals (ms) between consecutive spawns, or empty when there is
+     * not enough data (need >= 3 spawns for >= 2 intervals). Mirrors the backend {@code /spawns/stats}:
+     * sort, diff, then drop both likely missed-spawn gaps (> 2x median) and spurious short intervals
+     * (< 0.5x median) so neither end of the range is skewed by capture noise.
      */
-    private static String intervalRange(List<Long> spawns) {
+    private static List<Long> filteredIntervals(List<Long> spawns) {
         if (spawns == null || spawns.size() < 3) {
-            return "—";
+            return List.of();
         }
         ArrayList<Long> sorted = new ArrayList<Long>(spawns);
         Collections.sort(sorted);
@@ -662,11 +731,17 @@ implements Module {
         long med = MiniEventsModule.medianLong(iv);
         ArrayList<Long> use = new ArrayList<Long>();
         for (long d : iv) {
-            if (med > 0L && d > 2L * med) continue;
+            if (med > 0L && (d < med / 2L || d > 2L * med)) continue;
             use.add(d);
         }
+        return use.isEmpty() ? iv : use;
+    }
+
+    /** Observed "min–max" interval string, or "—" when there is not enough data. */
+    private static String intervalRange(List<Long> spawns) {
+        List<Long> use = MiniEventsModule.filteredIntervals(spawns);
         if (use.isEmpty()) {
-            use = iv;
+            return "—";
         }
         long min = Long.MAX_VALUE;
         long max = Long.MIN_VALUE;
@@ -679,6 +754,29 @@ implements Module {
             }
         }
         return MiniEventsModule.fmtDuration(min) + "–" + MiniEventsModule.fmtDuration(max);
+    }
+
+    /** Median of the filtered intervals (ms), or null when there is not enough data. */
+    private static Long medianFilteredInterval(List<Long> spawns) {
+        List<Long> use = MiniEventsModule.filteredIntervals(spawns);
+        if (use.isEmpty()) {
+            return null;
+        }
+        return MiniEventsModule.medianLong(use);
+    }
+
+    /**
+     * Estimated time-to-next-spawn (ms) = last witnessed spawn + median interval − now. Negative when the
+     * spawn is already "overdue". Null when there is not enough data. Used by the options screen only.
+     */
+    public Long nextProbableRemainingMs(boolean boss) {
+        List<Long> spawns = this.effectiveSpawns(boss);
+        Long med = MiniEventsModule.medianFilteredInterval(spawns);
+        if (med == null || spawns.isEmpty()) {
+            return null;
+        }
+        long last = Collections.max(spawns);
+        return last + med - System.currentTimeMillis();
     }
 
     private static long medianLong(List<Long> xs) {

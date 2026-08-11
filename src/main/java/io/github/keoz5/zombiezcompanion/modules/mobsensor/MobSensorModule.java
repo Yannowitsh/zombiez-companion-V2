@@ -25,7 +25,10 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.FormattedText;
 import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.world.entity.Display;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 
 /**
@@ -52,11 +55,16 @@ implements Module {
     private static final double FRAME_MIN_H = 12.0;
     private static final double FRAME_MIN_W = 8.0;
 
+    private static final int MAX_TRACKED = 400;
     private ConfigManager configManager;
-    // Mutant nameplate positions from the last tick scan; consumed by both HUD counter and frames.
-    private List<Vec3> targets = List.of();
+    // Matched entity boxes from the last tick scan; consumed by both HUD counter and frames.
+    private List<Target> targets = List.of();
     private int mutantCount;
     private int nearestDistBlocks = -1;
+
+    /** A highlighted entity: horizontal position + world Y for the frame top/bottom, and a center for distance. */
+    private record Target(double x, double y, double z, double topY, double botY) {
+    }
 
     @Override
     public String id() {
@@ -65,7 +73,7 @@ implements Module {
 
     @Override
     public String displayName() {
-        return "Capteur de mutants";
+        return "Traqueur de mobs";
     }
 
     @Override
@@ -90,7 +98,7 @@ implements Module {
 
     @Override
     public List<String> searchKeywords() {
-        return List.of("mutant", "mob", "capteur", "sensor", "esp", "contour", "cadre", "farm");
+        return List.of("mutant", "mob", "capteur", "traqueur", "tracker", "sensor", "esp", "contour", "cadre", "farm", "slot");
     }
 
     @Override
@@ -136,11 +144,11 @@ implements Module {
             this.resetCounts();
             return;
         }
-        this.targets = MobSensorModule.collectMutants(client, this.range());
+        this.targets = this.collectTargets(client, this.range());
         this.mutantCount = this.targets.size();
         double bestSq = Double.MAX_VALUE;
-        for (Vec3 p : this.targets) {
-            double sq = client.player.distanceToSqr(p.x, p.y, p.z);
+        for (Target t : this.targets) {
+            double sq = client.player.distanceToSqr(t.x(), t.y(), t.z());
             if (sq < bestSq) {
                 bestSq = sq;
             }
@@ -158,21 +166,95 @@ implements Module {
         this.nearestDistBlocks = -1;
     }
 
-    /**
-     * Nameplate positions of the new rig-based mutants. On ZombieZ each such mutant is a composite of
-     * display entities; its readable name (e.g. "Mutant Skeleton", "Rapide Mutant Creeper") lives in a
-     * {@code text_display}'s text — NOT in any mob's custom name — so we detect those.
-     */
-    private static List<Vec3> collectMutants(Minecraft client, double range) {
-        List<Display.TextDisplay> tds = client.level.getEntitiesOfClass(Display.TextDisplay.class,
-                client.player.getBoundingBox().inflate(range), e -> !e.isRemoved());
-        ArrayList<Vec3> out = new ArrayList<Vec3>();
-        for (Display.TextDisplay td : tds) {
-            if (MobSensorModule.isMutantText(td.textRenderState().text().getString())) {
-                out.add(td.position());
+    /** Normalized, non-empty queries from the enabled track slots. */
+    private List<String> enabledQueries() {
+        ArrayList<String> qs = new ArrayList<String>();
+        for (MobSensorConfig.Track t : this.config().tracks) {
+            if (t == null || !t.enabled) continue;
+            String q = MobSensorModule.stripDiacritics(t.query == null ? "" : t.query.trim()).toLowerCase(Locale.ROOT);
+            if (!q.isEmpty()) {
+                qs.add(q);
             }
         }
+        return qs;
+    }
+
+    /**
+     * Nearby entities matching any enabled track query. The query is matched (case/accent-insensitive)
+     * against the entity's type id, custom name, display name, scoreboard tags, and — for the display
+     * rigs used by ZombieZ mutants — the {@code text_display} text. Framing uses the entity bounding box
+     * for real mobs, or the name-relative box for a {@code text_display} rig (whose name floats above).
+     */
+    private List<Target> collectTargets(Minecraft client, double range) {
+        List<String> queries = this.enabledQueries();
+        if (queries.isEmpty() || client.player == null || client.level == null) {
+            return List.of();
+        }
+        AABB area = client.player.getBoundingBox().inflate(range);
+        List<Entity> ents = client.level.getEntitiesOfClass(Entity.class, area, e -> !e.isRemoved() && e != client.player);
+        ArrayList<Target> out = new ArrayList<Target>();
+        for (Entity e : ents) {
+            String hay = MobSensorModule.searchText(e);
+            if (hay.isEmpty()) continue;
+            boolean match = false;
+            for (String q : queries) {
+                if (hay.contains(q)) {
+                    match = true;
+                    break;
+                }
+            }
+            if (!match) continue;
+            double topY;
+            double botY;
+            double cy;
+            if (e instanceof Display.TextDisplay) {
+                double py = e.getY();
+                topY = py + BOX_TOP_OFFSET;
+                botY = py - BOX_BOTTOM_OFFSET;
+                cy = py - 1.0;
+            } else {
+                AABB bb = e.getBoundingBox();
+                topY = bb.maxY + 0.15;
+                botY = bb.minY;
+                cy = (bb.maxY + bb.minY) / 2.0;
+            }
+            out.add(new Target(e.getX(), cy, e.getZ(), topY, botY));
+            if (out.size() >= MAX_TRACKED) break;
+        }
         return out;
+    }
+
+    /** Full searchable text for an entity: type id + custom name + display name + tags + text_display text. */
+    private static String searchText(Entity e) {
+        StringBuilder sb = new StringBuilder();
+        try {
+            sb.append(EntityType.getKey(e.getType())).append(' ');
+        }
+        catch (Exception exception) {
+            // ignore
+        }
+        Component custom = e.getCustomName();
+        if (custom != null) {
+            sb.append(custom.getString()).append(' ');
+        }
+        try {
+            sb.append(e.getName().getString()).append(' ');
+        }
+        catch (Exception exception) {
+            // ignore
+        }
+        for (String tag : e.entityTags()) {
+            sb.append(tag).append(' ');
+        }
+        if (e instanceof Display.TextDisplay td) {
+            try {
+                sb.append(td.textRenderState().text().getString()).append(' ');
+            }
+            catch (Exception exception) {
+                // ignore
+            }
+        }
+        return MobSensorModule.stripDiacritics(sb.toString()).toLowerCase(Locale.ROOT);
     }
 
     /** True when a text_display's text contains the mutant keyword (ignoring case, accents and pack glyphs). */
@@ -243,9 +325,9 @@ implements Module {
         int base = Colors.get("mutant_frame", MUTANT_FRAME_DEFAULT);
         int frameCol = 0xFF000000 | (base & 0xFFFFFF);
         int fillCol = base;
-        for (Vec3 p : this.targets) {
-            double[] top = MobSensorModule.project(camera, screenW, screenH, p.x, p.y + BOX_TOP_OFFSET, p.z);
-            double[] bot = MobSensorModule.project(camera, screenW, screenH, p.x, p.y - BOX_BOTTOM_OFFSET, p.z);
+        for (Target t : this.targets) {
+            double[] top = MobSensorModule.project(camera, screenW, screenH, t.x(), t.topY(), t.z());
+            double[] bot = MobSensorModule.project(camera, screenW, screenH, t.x(), t.botY(), t.z());
             if (top == null || bot == null) {
                 continue;
             }

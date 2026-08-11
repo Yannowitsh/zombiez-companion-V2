@@ -5,7 +5,7 @@
 
 const PRESENCE_TTL = 120;              // seconds a presence entry stays "online"
 const PING_TTL = 60 * 60 * 24 * 30;    // 30 days
-const SPAWN_CAP = 200;                 // keep last N spawn timestamps (long history for interval stats)
+const SPAWN_CAP = 500;                 // keep last N spawn timestamps (long history for interval stats)
 const SPAWN_DEDUP_MS = 300000;         // 5 min: ignore near-duplicate spawns (mirrors the mod)
 const FEEDBACK_COOLDOWN = 60;          // seconds between feedbacks per uuid
 const MAX_MSG = 5000;
@@ -98,7 +98,9 @@ function intervalStats(list) {
   const iv = [];
   for (let i = 1; i < sorted.length; i++) iv.push(sorted[i] - sorted[i - 1]);
   const med = median(iv);
-  const filtered = med > 0 ? iv.filter((d) => d <= 2 * med) : iv;
+  // Two-sided outlier filter: drop likely missed-spawn gaps (> 2x median) AND spurious short
+  // intervals from near-duplicate captures (< 0.5x median), so both ends of the range stay meaningful.
+  const filtered = med > 0 ? iv.filter((d) => d >= 0.5 * med && d <= 2 * med) : iv;
   const use = filtered.length ? filtered : iv;
   return {
     n: use.length,
