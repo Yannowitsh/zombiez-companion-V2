@@ -43,6 +43,28 @@ This is a full rewrite that adds support for the server's second, instanced map
 Historique des modifications par version (branche **26.1.2**). Nom du jar :
 `zombiezcompanionV2-<version_minecraft>-<version_mod>`.
 
+### 1.6.0
+- **AutoText refondu** (module `auto_text`) façon presets : liste unifiée jusqu'à **100 presets**
+  (ajout automatique d'une case vide dès qu'on remplit la dernière), migration des anciennes entrées
+  texte+touche. **Barre d'icônes cliquables** affichée quand le chat est ouvert (clic = envoi du
+  message/commande) — pratique pour les modérateurs ; position via l'éditeur HUD. Éditeur par preset :
+  nom, item de l'icône (aperçu live), visible dans la barre, couleurs texte/fond. Réglages de barre
+  (activer, seulement chat ouvert, sens horizontal/vertical).
+- **Amis & Groupe** : Amis et Groupe réunis en **un seul module**. Les amis deviennent un **annuaire**
+  (on ne les traque plus dans le monde). Nouveau **groupe** (max 4) : créer / inviter / accepter /
+  quitter / exclure / léguer le chef ; **visibilité entre membres** (chef en or, membres en vert) ;
+  **ping partagé** (touche dédiée : 1 clic pose, double-clic retire) ; **suivi du chef** (rejoue
+  automatiquement ses `refuge tp`, option) ; **donjon de groupe auto** (compte à rebours de 3 s,
+  sneak pour annuler, option).
+- **Crânes** : coordonnées synchronisées sur **CraneMod v1.1.4** (500 crânes) — 13 ajoutés, 2 corrigés.
+  Progression des utilisateurs conservée (identifiants de crânes stables).
+
+### 1.5.0
+- **Refonte de l'affichage des amis** : rendu depuis l'**entité réelle chargée** (position fluide,
+  instantanée), repli sur le snapshot de présence backend hors de portée de rendu. **3 styles de
+  marqueur** (auto / waypoint / box), marqueurs **edge-clampés** (ne disparaissent plus hors écran ou
+  derrière la caméra), **couleur par ami**. Rafraîchissement de la présence plus réactif.
+
 ### 1.4.1
 - Version de validation de la **mise à jour intégrée** (aucun changement de gameplay).
 
