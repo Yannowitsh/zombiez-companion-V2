@@ -25,6 +25,10 @@ eclipse/
 .DS_Store
 Thumbs.db
 
+# Dev-only, never committed (personal planning / captured logs)
+IDEAS.md
+latest.log
+
 # Cloudflare Worker (backend) — local cache / deps / dev secrets
 backend/.wrangler/
 backend/node_modules/

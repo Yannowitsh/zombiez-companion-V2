@@ -17,6 +17,7 @@ import io.github.keoz5.zombiezcompanion.modules.map.WaypointsModule;
 import io.github.keoz5.zombiezcompanion.modules.map.ZombieZMapData;
 import io.github.keoz5.zombiezcompanion.modules.map.ZombieZMapScreen;
 import io.github.keoz5.zombiezcompanion.modules.minievents.MiniEventsModule;
+import io.github.keoz5.zombiezcompanion.modules.mobsensor.MobSensorModule;
 import io.github.keoz5.zombiezcompanion.modules.players.PlayersModule;
 import io.github.keoz5.zombiezcompanion.modules.skulls.SkullsManagerScreen;
 import io.github.keoz5.zombiezcompanion.modules.skulls.SkullsModule;
@@ -83,6 +84,7 @@ implements ClientModInitializer {
         HudElements.register("world_boss_timer", "zombiezcompanion.hud.element.world_boss_timer", 150, 16, 0.0, 0.36, true);
         HudElements.register("lure_timer", "zombiezcompanion.hud.element.lure_timer", 110, 18, 0.0, 0.42, true);
         HudElements.register("flower_timer", "zombiezcompanion.hud.element.flower_timer", 150, 18, 0.0, 0.48, true);
+        HudElements.register("mutant_sensor", "zombiezcompanion.hud.element.mutant_sensor", 140, 16, 0.0, 0.54, true);
     }
 
     /**
@@ -120,6 +122,7 @@ implements ClientModInitializer {
         mm.register(new AutoTextModule());
         mm.register(new DropAlertModule());
         mm.register(new MiniEventsModule());
+        mm.register(new MobSensorModule());
         mm.register(new StatsModule());
         mm.register(new SkullsModule());
         mm.register(new TelemetryModule());

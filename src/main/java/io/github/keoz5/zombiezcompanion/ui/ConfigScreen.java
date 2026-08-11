@@ -108,6 +108,11 @@ extends Screen {
                 this.minecraft.setScreen((Screen)new HudEditorScreen(this, this.configManager));
             }
         }, -266723542, -265932737, -854792));
+        this.addRenderableWidget(new StyledButton(this.panelX1 + 12 + 92 + 6 + 78 + 6 + 90 + 6, btnY, 84, btnH, (Component)Component.translatable((String)"zombiezcompanion.colors.open"), btn -> {
+            if (this.minecraft != null) {
+                this.minecraft.setScreen((Screen)new ColorsScreen(this, this.configManager));
+            }
+        }, -266723542, -265932737, -854792));
         this.addRenderableWidget(new StyledButton(this.panelX2 - 12 - 92 - 6 - 78, btnY, 78, btnH, (Component)Component.translatable((String)"zombiezcompanion.title.button.discord"), btn -> Util.getPlatform().openUri(URI.create(ModInfo.DISCORD_URL)), -11441921, -8874241, -854792));
         this.addRenderableWidget(new StyledButton(this.panelX2 - 12 - 92 - 6 - 78 - 6 - 88, btnY, 88, btnH, (Component)Component.translatable((String)"zombiezcompanion.feedback.button"), btn -> {
             if (this.minecraft != null) {

@@ -5,7 +5,7 @@
 
 const PRESENCE_TTL = 120;              // seconds a presence entry stays "online"
 const PING_TTL = 60 * 60 * 24 * 30;    // 30 days
-const SPAWN_CAP = 30;                  // keep last N spawn timestamps (mirrors the mod)
+const SPAWN_CAP = 200;                 // keep last N spawn timestamps (long history for interval stats)
 const SPAWN_DEDUP_MS = 300000;         // 5 min: ignore near-duplicate spawns (mirrors the mod)
 const FEEDBACK_COOLDOWN = 60;          // seconds between feedbacks per uuid
 const MAX_MSG = 5000;
@@ -25,6 +25,7 @@ export default {
       if (path === "/version" && method === "GET") return json({ latest: env.LATEST_VERSION || null, url: env.DOWNLOAD_URL || null });
       if (path === "/ping" && method === "POST") return handlePing(request, env);
       if (path === "/spawns" && method === "GET") return getSpawns(env);
+      if (path === "/spawns/stats" && method === "GET") return getSpawnStats(env);
       if (path === "/spawns" && method === "POST") return postSpawn(request, env);
       if (path === "/presence" && method === "GET") return getPresence(url, env);
       if (path === "/presence" && method === "POST") return postPresence(request, env);
@@ -54,6 +55,44 @@ async function handlePing(request, env) {
 async function getSpawns(env) {
   const [m, w] = await Promise.all([env.ZZC.get("spawns:marchand"), env.ZZC.get("spawns:world_boss")]);
   return json({ marchand: m ? JSON.parse(m) : [], world_boss: w ? JSON.parse(w) : [] });
+}
+
+// Observed interval stats per spawn type. Intervals are computed between consecutive
+// (chronologically sorted) recorded spawns; likely "missed spawn" gaps (> 2x median) are
+// dropped so a single hole doesn't inflate the max. Returns durations in milliseconds.
+async function getSpawnStats(env) {
+  const [m, w] = await Promise.all([env.ZZC.get("spawns:marchand"), env.ZZC.get("spawns:world_boss")]);
+  return json({
+    marchand: intervalStats(m ? JSON.parse(m) : []),
+    world_boss: intervalStats(w ? JSON.parse(w) : []),
+  });
+}
+
+function median(xs) {
+  if (!xs.length) return 0;
+  const s = [...xs].sort((a, b) => a - b);
+  const n = s.length;
+  return n % 2 ? s[(n - 1) / 2] : Math.round((s[n / 2 - 1] + s[n / 2]) / 2);
+}
+
+function intervalStats(list) {
+  // Need >= 3 spawns (>= 2 intervals) for a meaningful min/max range.
+  if (!Array.isArray(list) || list.length < 3) {
+    return { n: 0, samples: Array.isArray(list) ? list.length : 0, min: null, max: null, median: null };
+  }
+  const sorted = [...list].sort((a, b) => a - b);
+  const iv = [];
+  for (let i = 1; i < sorted.length; i++) iv.push(sorted[i] - sorted[i - 1]);
+  const med = median(iv);
+  const filtered = med > 0 ? iv.filter((d) => d <= 2 * med) : iv;
+  const use = filtered.length ? filtered : iv;
+  return {
+    n: use.length,
+    samples: list.length,
+    min: Math.min(...use),
+    max: Math.max(...use),
+    median: median(use),
+  };
 }
 
 async function postSpawn(request, env) {
