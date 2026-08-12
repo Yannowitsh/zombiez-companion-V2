@@ -26,7 +26,24 @@ simple = { limit = 5, period = 60 }
 [triggers]
 crons = ["* * * * *"]
 
+# Realtime hub: a single Durable Object holds every client's WebSocket for instant push
+# (broadcast toasts + group pings). Requires the Workers paid plan? -> SQLite-backed DOs are
+# available on the free plan (with limits); verify billing before first deploy.
+[[durable_objects.bindings]]
+name = "HUB"
+class_name = "Hub"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["Hub"]
+
 # Update these on each mod release to drive the in-game update notification.
 [vars]
 LATEST_VERSION = "1.0.2"
 DOWNLOAD_URL = "https://github.com/Yannowitsh/zombiez-companion-V2/releases"
+# Discord slash-command verification. DISCORD_PUBLIC_KEY = your app's public key (portal ->
+# General Information). DISCORD_ADMIN_IDS = optional comma-separated Discord user ids allowed to
+# run /broadcast (empty = anyone who can see the command). Both safe as plaintext vars (public key
+# is not secret; the bot token used to *register* the command stays out of the repo).
+DISCORD_PUBLIC_KEY = "9633c1de67af4457802153d7f34bfb1a98132bb63fe6afd8969c3e96ec911f65"
+DISCORD_ADMIN_IDS = "236894641138565123"

@@ -14,6 +14,9 @@ const json = (obj, status = 200) =>
   new Response(JSON.stringify(obj), { status, headers: { "content-type": "application/json" } });
 const noContent = () => new Response(null, { status: 204 });
 
+// Durable Object class for the realtime hub (WebSocket push). Must be re-exported from the entry module.
+export { Hub } from "./hub.js";
+
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
@@ -28,6 +31,14 @@ export default {
       }
 
       if (method === "GET" && path === "/") return new Response("Zombiez Companion V2 API — ok");
+
+      // Realtime: WebSocket upgrade -> forwarded to the single shared Hub Durable Object.
+      if (path === "/ws") {
+        if (request.headers.get("Upgrade") !== "websocket") return json({ error: "expected_websocket" }, 426);
+        return env.HUB.getByName("global").fetch(request);
+      }
+      // Discord slash-command interactions endpoint (Discord POSTs here; ed25519-signed).
+      if (path === "/discord" && method === "POST") return handleDiscord(request, env);
 
       if (path === "/version" && method === "GET") return json({ latest: env.LATEST_VERSION || null, url: env.DOWNLOAD_URL || null });
       if (path === "/ping" && method === "POST") return handlePing(request, env);
@@ -74,6 +85,64 @@ export default {
 
 async function readJson(request) {
   try { return await request.json(); } catch { return null; }
+}
+
+// --- Discord slash commands (interactions endpoint) ----------------------
+// Discord POSTs every interaction here, signed with ed25519. We verify the signature against the
+// app's public key, answer the initial PING (type 1), and handle /broadcast (type 2) by pushing a
+// toast to all connected clients via the Hub DO. Response types: 1 = PONG, 4 = message reply.
+function hexToBytes(hex) {
+  const clean = String(hex || "").trim();
+  const out = new Uint8Array(clean.length >> 1);
+  for (let i = 0; i < out.length; i++) out[i] = parseInt(clean.substr(i * 2, 2), 16);
+  return out;
+}
+
+async function verifyEd25519(pubHex, sigHex, msgBytes) {
+  const pub = hexToBytes(pubHex);
+  const sig = hexToBytes(sigHex);
+  // Workers accept "Ed25519"; older runtimes used "NODE-ED25519". Try both for robustness.
+  const algos = [{ name: "Ed25519" }, { name: "NODE-ED25519", namedCurve: "NODE-ED25519" }];
+  for (const algo of algos) {
+    try {
+      const key = await crypto.subtle.importKey("raw", pub, algo, false, ["verify"]);
+      return await crypto.subtle.verify(algo.name, key, sig, msgBytes);
+    } catch { /* try next */ }
+  }
+  return false;
+}
+
+async function handleDiscord(request, env) {
+  if (!env.DISCORD_PUBLIC_KEY) return json({ error: "not_configured" }, 500);
+  const sig = request.headers.get("X-Signature-Ed25519");
+  const ts = request.headers.get("X-Signature-Timestamp");
+  const raw = await request.text();
+  if (!sig || !ts) return new Response("missing signature", { status: 401 });
+
+  const valid = await verifyEd25519(env.DISCORD_PUBLIC_KEY, sig, new TextEncoder().encode(ts + raw));
+  if (!valid) return new Response("invalid signature", { status: 401 });
+
+  let body;
+  try { body = JSON.parse(raw); } catch { return json({ error: "bad_request" }, 400); }
+
+  if (body.type === 1) return json({ type: 1 }); // PING -> PONG (required by Discord)
+
+  if (body.type === 2 && body.data && body.data.name === "broadcast") {
+    // Optional admin gate: if DISCORD_ADMIN_IDS is set, only those users may broadcast.
+    const admins = String(env.DISCORD_ADMIN_IDS || "").split(",").map((s) => s.trim()).filter(Boolean);
+    const invoker = (body.member && body.member.user && body.member.user.id) || (body.user && body.user.id) || "";
+    if (admins.length && !admins.includes(invoker)) {
+      return json({ type: 4, data: { content: "⛔ Non autorisé.", flags: 64 } });
+    }
+    const opt = (body.data.options || []).find((o) => o.name === "message");
+    const msg = opt ? String(opt.value || "") : "";
+    if (!msg) return json({ type: 4, data: { content: "Message vide.", flags: 64 } });
+    let n = 0;
+    try { n = await env.HUB.getByName("global").broadcast(msg); } catch { /* hub unreachable */ }
+    return json({ type: 4, data: { content: `📢 Envoyé à ${n} joueur(s) : ${msg}`, flags: 64 } });
+  }
+
+  return json({ type: 4, data: { content: "Commande inconnue.", flags: 64 } });
 }
 
 async function handlePing(request, env) {

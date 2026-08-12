@@ -211,6 +211,10 @@
   "zombiezcompanion.autotext.edit.show_in_bar": "Dans la barre",
   "zombiezcompanion.autotext.edit.text_color": "Couleur texte",
   "zombiezcompanion.autotext.edit.bg_color": "Couleur fond",
+  "zombiezcompanion.autotext.edit.auto_send": "Envoi auto",
+  "zombiezcompanion.autotext.pick.title": "Choisir un objet",
+  "zombiezcompanion.autotext.pick.search": "Rechercher un objet...",
+  "zombiezcompanion.autotext.pick.count": "%s objets",
 
   "zombiezcompanion.minimap.options.header": "Réglages mini-map",
   "zombiezcompanion.minimap.slider.size": "Taille mini-map : %s px",
@@ -491,6 +495,7 @@
   "zombiezcompanion.hud.element.flower_timer": "Timer Fleur d'Infestation",
   "zombiezcompanion.hud.element.mutant_sensor": "Capteur mutants",
   "zombiezcompanion.hud.element.auto_text_bar": "Barre de textes auto",
+  "zombiezcompanion.hud.element.broadcast_toast": "Toast annonce",
 
   "zombiezcompanion.module.consumables.desc": "Timers HUD pour le Leurre et la Fleur d'Infestation",
   "zombiezcompanion.consumables.options.header": "Consommables — Timers HUD",

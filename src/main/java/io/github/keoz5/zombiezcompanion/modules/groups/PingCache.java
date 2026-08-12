@@ -25,7 +25,28 @@ public final class PingCache {
         pings = List.of();
     }
 
-    public static void update(String json) {
+    /** Insert or replace one member's ping (by uuid). Used for instant WebSocket delivery. */
+    public static synchronized void put(Ping p) {
+        if (p == null || p.uuid() == null || p.uuid().isBlank()) {
+            return;
+        }
+        ArrayList<Ping> list = new ArrayList<Ping>(pings);
+        list.removeIf(e -> e.uuid().equals(p.uuid()));
+        list.add(p);
+        pings = list;
+    }
+
+    /** Remove one member's ping (by uuid). Used for instant WebSocket clears. */
+    public static synchronized void remove(String uuid) {
+        if (uuid == null || uuid.isBlank()) {
+            return;
+        }
+        ArrayList<Ping> list = new ArrayList<Ping>(pings);
+        list.removeIf(e -> e.uuid().equals(uuid));
+        pings = list;
+    }
+
+    public static synchronized void update(String json) {
         if (json == null) {
             return;
         }

@@ -32,6 +32,8 @@ public final class AutoTextConfig {
         public String itemId = "minecraft:paper";
         public int keyCode = -1;
         public boolean showInBar = true;
+        /** When true (default), firing sends immediately; when false, the text is dropped into the open chat unsent. */
+        public boolean autoSend = true;
         public int color = 0xFFFFFFFF;
         public int backgroundColor = 0x80000000;
     }

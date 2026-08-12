@@ -43,6 +43,20 @@ This is a full rewrite that adds support for the server's second, instanced map
 Historique des modifications par version (branche **26.1.2**). Nom du jar :
 `zombiezcompanionV2-<version_minecraft>-<version_mod>`.
 
+### 1.7.0
+- **AutoText — envoi auto par preset** : nouvelle option **« Envoi auto »** dans l'éditeur d'un preset.
+  Désactivée, le raccourci ou le clic dans la barre **pré-remplit le chat sans envoyer** (message ou
+  commande), pour éditer par ex. un pseudo dans une commande avant de valider. Activée (défaut), envoi
+  immédiat comme avant.
+- **AutoText — sélecteur d'objet visuel** : un clic sur l'icône d'aperçu ouvre une **grille de tous les
+  items du jeu avec barre de recherche** ; le champ `minecraft:…` reste dispo pour la saisie manuelle.
+- **Annonces temps réel** : un **toast bannière** (centré, en haut, ~5 s) poussé à **tous les joueurs
+  en ligne** depuis Discord (commande `/broadcast`). Diffusion instantanée via WebSocket (backend
+  Durable Object) ; position ajustable via l'éditeur HUD (« Toast annonce »).
+- **Pings de groupe instantanés** : les pings partagés sont désormais **livrés en temps réel** par
+  WebSocket (avant : polling jusqu'à ~2,5 s). Le POST est conservé pour la persistance et les membres
+  non connectés ; le polling est ralenti et ne sert plus que de filet de sécurité.
+
 ### 1.6.0
 - **AutoText refondu** (module `auto_text`) façon presets : liste unifiée jusqu'à **100 presets**
   (ajout automatique d'une case vide dès qu'on remplit la dernière), migration des anciennes entrées

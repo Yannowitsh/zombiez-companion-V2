@@ -39,6 +39,7 @@ implements Module {
     /** Absolute hit rects of the bar's slots for the current frame, and the text each one sends. */
     private static final List<int[]> slotRects = new ArrayList<int[]>();
     private static final List<String> slotTexts = new ArrayList<String>();
+    private static final List<Boolean> slotAutoSend = new ArrayList<Boolean>();
 
     private ConfigManager configManager;
     private final boolean[] pressedLastTick = new boolean[AutoTextConfig.MAX_PRESETS];
@@ -151,7 +152,7 @@ implements Module {
             }
             pressed = GLFW.glfwGetKey((long)client.getWindow().handle(), (int)p.keyCode) == 1;
             if (pressed && !this.pressedLastTick[i]) {
-                this.sendConfiguredText(client, p.text);
+                this.fire(client, p.text, p.autoSend);
             }
             this.pressedLastTick[i] = pressed;
         }
@@ -160,12 +161,33 @@ implements Module {
         }
     }
 
-    /** Sends a preset's text now (used by the clickable chat bar). */
-    public void trigger(String text) {
+    /** Fires a preset now (used by the clickable chat bar): sends it, or drops it into the chat unsent. */
+    public void trigger(String text, boolean autoSend) {
         Minecraft client = Minecraft.getInstance();
         if (client != null) {
-            this.sendConfiguredText(client, text);
+            this.fire(client, text, autoSend);
         }
+    }
+
+    /** Either sends the text immediately (autoSend) or opens the chat pre-filled with it, unsent. */
+    private void fire(Minecraft client, String rawText, boolean autoSend) {
+        if (autoSend) {
+            this.sendConfiguredText(client, rawText);
+        } else {
+            this.openChatWith(client, rawText);
+        }
+    }
+
+    /** Opens (or replaces) the chat screen with the raw text pre-filled and cursor ready, without sending. */
+    private void openChatWith(Minecraft client, String rawText) {
+        if (rawText == null) {
+            return;
+        }
+        String text = rawText.trim();
+        if (text.isEmpty()) {
+            return;
+        }
+        client.setScreen((Screen)new ChatScreen(text, false));
     }
 
     // --- Clickable chat bar -------------------------------------------------
@@ -175,6 +197,7 @@ implements Module {
         Minecraft client = Minecraft.getInstance();
         slotRects.clear();
         slotTexts.clear();
+        slotAutoSend.clear();
         if (client.player == null || client.options.hideGui) {
             return;
         }
@@ -224,6 +247,7 @@ implements Module {
             ctx.item(AutoTextModule.iconStack(p.itemId), ix, iy);
             slotRects.add(new int[]{sx, sy, sx + slot, sy + slot});
             slotTexts.add(p.text);
+            slotAutoSend.add(Boolean.valueOf(p.autoSend));
         }
         HudElements.report(BAR_ELEMENT, boxX, boxY, boxW, boxH);
     }
@@ -244,7 +268,7 @@ implements Module {
         for (int i = 0; i < slotRects.size(); ++i) {
             int[] r = slotRects.get(i);
             if (mouseX >= (double)r[0] && mouseX <= (double)r[2] && mouseY >= (double)r[1] && mouseY <= (double)r[3]) {
-                m.trigger(slotTexts.get(i));
+                m.trigger(slotTexts.get(i), slotAutoSend.get(i).booleanValue());
                 return true;
             }
         }

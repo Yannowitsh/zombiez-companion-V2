@@ -25,6 +25,8 @@ import io.github.keoz5.zombiezcompanion.modules.skulls.SkullsManagerScreen;
 import io.github.keoz5.zombiezcompanion.modules.skulls.SkullsModule;
 import io.github.keoz5.zombiezcompanion.modules.stats.StatsModule;
 import io.github.keoz5.zombiezcompanion.modules.telemetry.TelemetryModule;
+import io.github.keoz5.zombiezcompanion.realtime.BroadcastToasts;
+import io.github.keoz5.zombiezcompanion.realtime.RealtimeClient;
 import io.github.keoz5.zombiezcompanion.ui.ConfigScreen;
 import io.github.keoz5.zombiezcompanion.ui.StatsScreen;
 import io.github.keoz5.zombiezcompanion.update.UpdateChecker;
@@ -97,6 +99,7 @@ implements ClientModInitializer {
         HudElements.register("flower_timer", "zombiezcompanion.hud.element.flower_timer", 150, 18, 0.0, 0.48, true);
         HudElements.register("mutant_sensor", "zombiezcompanion.hud.element.mutant_sensor", 140, 16, 0.0, 0.54, true);
         HudElements.register("auto_text_bar", "zombiezcompanion.hud.element.auto_text_bar", 100, 22, 0.01, 0.30, false);
+        HudElements.register("broadcast_toast", "zombiezcompanion.hud.element.broadcast_toast", 260, 40, 0.5, 0.12, true);
     }
 
     /**
@@ -147,8 +150,10 @@ implements ClientModInitializer {
     private void registerFabricHooks() {
         ClientTickEvents.END_CLIENT_TICK.register(moduleManager::onClientTick);
         ClientTickEvents.END_CLIENT_TICK.register(client -> UpdateChecker.tick());
+        ClientTickEvents.END_CLIENT_TICK.register(RealtimeClient::tick);
         HudElementRegistry.addLast(Identifier.fromNamespaceAndPath("zombiezcompanion", "hud"), (drawContext, deltaTracker) -> moduleManager.onHudRender(drawContext, deltaTracker.getGameTimeDeltaPartialTick(true)));
         HudElementRegistry.addLast(Identifier.fromNamespaceAndPath("zombiezcompanion", "update_banner"), (drawContext, deltaTracker) -> ZombieZCompanionClient.renderUpdateBanner(drawContext));
+        HudElementRegistry.addLast(Identifier.fromNamespaceAndPath("zombiezcompanion", "broadcast_toast"), (drawContext, deltaTracker) -> BroadcastToasts.render(drawContext));
         ClientReceiveMessageEvents.CHAT.register((message, signed, sender, params, timestamp) -> moduleManager.onChatMessage(message, false));
         ClientReceiveMessageEvents.GAME.register((message, overlay) -> {
             if (!overlay) {
@@ -158,6 +163,7 @@ implements ClientModInitializer {
         ClientPlayConnectionEvents.JOIN.register((handler, sender, client) -> moduleManager.onJoinWorld());
         ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> {
             moduleManager.onLeaveWorld();
+            RealtimeClient.close();
             configManager.save();
         });
     }

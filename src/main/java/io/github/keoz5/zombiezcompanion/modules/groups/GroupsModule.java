@@ -16,6 +16,7 @@ import io.github.keoz5.zombiezcompanion.modules.friends.FriendsModule;
 import io.github.keoz5.zombiezcompanion.modules.map.WaypointsModule;
 import io.github.keoz5.zombiezcompanion.modules.map.ZombieZDetector;
 import io.github.keoz5.zombiezcompanion.net.HttpClients;
+import io.github.keoz5.zombiezcompanion.realtime.RealtimeClient;
 import java.net.URI;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
@@ -46,8 +47,9 @@ implements Module {
     public static final String ID = "groups";
     public static final int MAX_MEMBERS = 4;
     private static final long POLL_MS = 12000L;
-    /** Ping share poll cadence — fast, so a shared position lands within a couple seconds. */
-    private static final long PING_POLL_MS = 2500L;
+    /** Ping share poll cadence. Pings now arrive instantly over the WebSocket; this poll only reconciles,
+     * covers members without an open socket, and drives the chief follow-action. */
+    private static final long PING_POLL_MS = 6000L;
     /** Two ping-key presses within this window remove the ping instead of placing one. */
     private static final long PING_DOUBLE_MS = 500L;
     /** Max raycast distance (blocks) for "ping where I'm looking". */
@@ -423,6 +425,8 @@ implements Module {
         String body = String.format(Locale.ROOT, "{\"uuid\":\"%s\",\"name\":\"%s\",\"x\":%.2f,\"y\":%.2f,\"z\":%.2f,\"dim\":\"%s\"}",
                 esc(self), esc(selfName()), point.x, point.y, point.z, esc(dim));
         this.postPing(ModInfo.API_BASE + "/group/ping", body);
+        // Instant delivery to connected members (the POST above is persistence + offline fallback).
+        RealtimeClient.sendPing(point.x, point.y, point.z, dim);
         if (mc.player != null) {
             mc.player.playSound((net.minecraft.sounds.SoundEvent)net.minecraft.sounds.SoundEvents.NOTE_BLOCK_PLING.value(), 0.5f, 1.7f);
         }
@@ -435,6 +439,7 @@ implements Module {
         }
         String body = String.format(Locale.ROOT, "{\"uuid\":\"%s\"}", esc(self));
         this.postPing(ModInfo.API_BASE + "/group/ping/clear", body);
+        RealtimeClient.sendPingClear();
     }
 
     private void postPing(String url, String body) {
