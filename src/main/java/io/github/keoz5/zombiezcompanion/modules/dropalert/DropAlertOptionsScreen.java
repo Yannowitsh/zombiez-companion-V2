@@ -119,8 +119,16 @@ extends ModuleOptionsScreen {
     }
 
     @Override
+    //? if >= 26.1 {
     public void extractRenderState(GuiGraphicsExtractor ctx, int mouseX, int mouseY, float delta) {
+    //?} else {
+    /*public void render(GuiGraphicsExtractor ctx, int mouseX, int mouseY, float delta) {
+    *///?}
+        //? if >= 26.1 {
         super.extractRenderState(ctx, mouseX, mouseY, delta);
+        //?} else {
+        /*super.render(ctx, mouseX, mouseY, delta);
+        *///?}
         ctx.text(this.font, (Component)Component.translatable((String)"zombiezcompanion.drop_alert.options.header"), this.panelX1 + 36, this.contentY1 + 20, -854792);
         ctx.text(this.font, (Component)Component.translatable((String)"zombiezcompanion.drop_alert.options.hint"), this.panelX1 + 36, this.contentY1 + 34, -8353376, false);
     }

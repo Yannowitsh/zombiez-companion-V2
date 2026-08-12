@@ -24,3 +24,22 @@ eclipse/
 # OS
 .DS_Store
 Thumbs.db
+
+# Dev-only, never committed (personal planning / captured logs)
+IDEAS.md
+latest.log
+
+# Reference mods / configs from other authors (inspiration only, never committed)
+/*.jar
+play.rinaorc.com.json
+
+# Local build archive (kept for personal version history, never committed).
+# NB: Stonecutter also uses versions/<id>/ for its per-version build config, which
+# MUST be committed — so ignore only the archived artifacts, not the whole dir.
+Versions/*.jar
+Versions/CHANGELOG.md
+
+# Cloudflare Worker (backend) — local cache / deps / dev secrets
+backend/.wrangler/
+backend/node_modules/
+backend/.dev.vars

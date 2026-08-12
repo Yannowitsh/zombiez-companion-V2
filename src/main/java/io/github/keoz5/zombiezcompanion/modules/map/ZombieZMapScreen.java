@@ -17,7 +17,11 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
+//? if >= 26.1 {
 import net.minecraft.client.renderer.rendertype.RenderType;
+//?} else {
+/*import net.minecraft.client.renderer.RenderType;
+*///?}
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.FormattedText;
 import net.minecraft.network.chat.MutableComponent;
@@ -138,7 +142,11 @@ extends Screen {
         this.centerOn(ZombieZMapData.mapX(this.searchMatch.x), ZombieZMapData.mapY(this.searchMatch.z));
     }
 
+    //? if >= 26.1 {
     public void extractRenderState(GuiGraphicsExtractor ctx, int mouseX, int mouseY, float delta) {
+    //?} else {
+    /*public void render(GuiGraphicsExtractor ctx, int mouseX, int mouseY, float delta) {
+    *///?}
         ctx.fill(0, 0, this.width, this.height, -301463026);
         this.renderBackdrop(ctx);
         int clipX1 = (int)Math.max((double)this.viewportLeft(), Math.floor(this.mapLeft()));
@@ -158,12 +166,20 @@ extends Screen {
             ctx.disableScissor();
         }
         this.renderChrome(ctx, mouseX, mouseY);
+        //? if >= 26.1 {
         super.extractRenderState(ctx, mouseX, mouseY, delta);
+        //?} else {
+        /*super.render(ctx, mouseX, mouseY, delta);
+        *///?}
         this.renderHoverInfo(ctx, mouseX, mouseY);
         this.renderOffServerOverlay(ctx);
     }
 
+    //? if >= 26.1 {
     public void extractBackground(GuiGraphicsExtractor ctx, int mouseX, int mouseY, float delta) {
+    //?} else {
+    /*public void renderBackground(GuiGraphicsExtractor ctx, int mouseX, int mouseY, float delta) {
+    *///?}
     }
 
     private void renderOffServerOverlay(GuiGraphicsExtractor ctx) {
@@ -193,7 +209,11 @@ extends Screen {
             for (int cx = startCx; cx <= endCx; ++cx) {
                 int x = this.screenX(cx * 128);
                 int y = this.screenY(cy * 128);
+                //? if >= 26.1 {
                 ctx.blit(net.minecraft.client.renderer.RenderPipelines.GUI_TEXTURED, ZombieZMapData.tileId(cx, cy), x, y, 0.0f, 0.0f, drawSize, drawSize, 128, 128, 128, 128);
+                //?} else {
+                /*ctx.blit(RenderType::guiTextured, ZombieZMapData.tileId(cx, cy), x, y, 0.0f, 0.0f, drawSize, drawSize, 128, 128, 128, 128);
+                *///?}
             }
         }
     }
@@ -401,8 +421,8 @@ extends Screen {
 
     static void drawPlayerDot(GuiGraphicsExtractor ctx, int x, int y, float scale) {
         ctx.pose().pushMatrix();
-        ctx.pose().translate((float)x, (float)y);
-        ctx.pose().scale(scale, scale);
+        io.github.keoz5.zombiezcompanion.compat.ZCPose.translate(ctx, (float)x, (float)y);
+        io.github.keoz5.zombiezcompanion.compat.ZCPose.scale(ctx, scale, scale);
         ctx.fill(-5, -5, 6, 6, -587202560);
         ctx.fill(-4, -1, 5, 2, -8874241);
         ctx.fill(-1, -4, 2, 5, -8874241);
@@ -542,8 +562,12 @@ extends Screen {
         }
     }
 
+    //? if >= 26.1 {
     public boolean mouseClicked(net.minecraft.client.input.MouseButtonEvent event, boolean doubleClick) {
         double mouseX = event.x(), mouseY = event.y(); int button = event.button();
+    //?} else {
+    /*public boolean mouseClicked(double mouseX, double mouseY, int button) {
+    *///?}
         if (button == 0 && this.config().guideTarget != null && this.isOverActiveGuidePanel(mouseX, mouseY)) {
             this.clearGuideTarget();
             return true;
@@ -565,7 +589,11 @@ extends Screen {
             }
             return true;
         }
+        //? if >= 26.1 {
         return super.mouseClicked(event, doubleClick);
+        //?} else {
+        /*return super.mouseClicked(mouseX, mouseY, button);
+        *///?}
     }
 
     private boolean handleLayerButtonClick(double mouseX, double mouseY) {
@@ -619,8 +647,12 @@ extends Screen {
         return mouseX >= 8.0 && mouseX <= 132.0 && mouseY >= (double)panelY && mouseY <= (double)(panelY + 44);
     }
 
+    //? if >= 26.1 {
     public boolean mouseReleased(net.minecraft.client.input.MouseButtonEvent event) {
         double mouseX = event.x(), mouseY = event.y(); int button = event.button();
+    //?} else {
+    /*public boolean mouseReleased(double mouseX, double mouseY, int button) {
+    *///?}
         if (button == 0 && this.waypointClickCandidate) {
             double dragDistance = Math.hypot(mouseX - this.waypointClickStartX, mouseY - this.waypointClickStartY);
             boolean isClick = !this.waypointClickDragged && dragDistance <= 4.0;
@@ -644,7 +676,11 @@ extends Screen {
             }
             return true;
         }
+        //? if >= 26.1 {
         return super.mouseReleased(event);
+        //?} else {
+        /*return super.mouseReleased(mouseX, mouseY, button);
+        *///?}
     }
 
     private MapConfig.Waypoint findNearestWaypointAtScreen(double mouseX, double mouseY) {
@@ -794,10 +830,18 @@ extends Screen {
         this.clampView();
     }
 
+    //? if >= 26.1 {
     public boolean mouseDragged(net.minecraft.client.input.MouseButtonEvent event, double deltaX, double deltaY) {
         double mouseX = event.x(), mouseY = event.y(); int button = event.button();
+    //?} else {
+    /*public boolean mouseDragged(double mouseX, double mouseY, int button, double deltaX, double deltaY) {
+    *///?}
         if (button != 0) {
+            //? if >= 26.1 {
             return super.mouseDragged(event, deltaX, deltaY);
+            //?} else {
+            /*return super.mouseDragged(mouseX, mouseY, button, deltaX, deltaY);
+            *///?}
         }
         if (this.waypointClickCandidate && Math.hypot(mouseX - this.waypointClickStartX, mouseY - this.waypointClickStartY) > 4.0) {
             this.waypointClickDragged = true;
@@ -828,8 +872,12 @@ extends Screen {
         return true;
     }
 
+    //? if >= 26.1 {
     public boolean keyPressed(net.minecraft.client.input.KeyEvent event) {
         int keyCode = event.key(), scanCode = event.scancode(), modifiers = event.modifiers();
+    //?} else {
+    /*public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
+    *///?}
         if (this.searchField != null && this.searchField.isFocused()) {
             if (keyCode == 257 || keyCode == 335) {
                 this.jumpToSearchMatch();
@@ -840,7 +888,11 @@ extends Screen {
                 this.searchField.setFocused(false);
                 return true;
             }
-            return super.keyPressed(event);
+            //? if >= 26.1 {
+        return super.keyPressed(event);
+        //?} else {
+        /*return super.keyPressed(keyCode, scanCode, modifiers);
+        *///?}
         }
         if (keyCode == 77 || keyCode == 256) {
             this.onClose();
@@ -862,7 +914,11 @@ extends Screen {
             this.zoomAroundCenter(0.8474576271186441);
             return true;
         }
+        //? if >= 26.1 {
         return super.keyPressed(event);
+        //?} else {
+        /*return super.keyPressed(keyCode, scanCode, modifiers);
+        *///?}
     }
 
     private boolean toggle(Runnable action) {

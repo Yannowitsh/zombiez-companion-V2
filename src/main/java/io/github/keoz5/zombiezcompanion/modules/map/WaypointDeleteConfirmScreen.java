@@ -57,7 +57,11 @@ extends Screen {
         this.onClose();
     }
 
+    //? if >= 26.1 {
     public void extractRenderState(GuiGraphicsExtractor ctx, int mouseX, int mouseY, float delta) {
+    //?} else {
+    /*public void render(GuiGraphicsExtractor ctx, int mouseX, int mouseY, float delta) {
+    *///?}
         ctx.fill(0, 0, this.width, this.height, -1610612736);
         int panelW = Math.max(220, Math.min(300, this.width - 16));
         int panelH = 118;
@@ -72,7 +76,11 @@ extends Screen {
         ctx.text(this.font, (Component)Component.translatable((String)(this.deleteAll ? "zombiezcompanion.waypoint.delete.prompt_all" : "zombiezcompanion.waypoint.delete.prompt")), panelX + 18, panelY + 14, -854792);
         ctx.text(this.font, (Component)(this.deleteAll ? Component.translatable((String)"zombiezcompanion.waypoint.delete.all_count", (Object[])new Object[]{this.configManager.get().map.waypoints.size()}) : Component.literal((String)label)), panelX + 18, panelY + 34, -1, false);
         ctx.text(this.font, (Component)Component.translatable((String)(this.deleteAll ? "zombiezcompanion.waypoint.delete.subtext_all" : "zombiezcompanion.waypoint.delete.subtext")), panelX + 18, panelY + 52, -8353376, false);
+        //? if >= 26.1 {
         super.extractRenderState(ctx, mouseX, mouseY, delta);
+        //?} else {
+        /*super.render(ctx, mouseX, mouseY, delta);
+        *///?}
     }
 
     private MapConfig.Waypoint findWaypoint() {

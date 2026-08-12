@@ -60,8 +60,12 @@ extends Screen {
         this.addRenderableWidget(new StyledButton(this.width / 2 + 10, this.height - 34, 150, 22, (Component)Component.translatable((String)"zombiezcompanion.button.close"), b -> this.onClose(), -11441921, -8874241, -854792));
     }
 
+    //? if >= 26.1 {
     public boolean mouseClicked(net.minecraft.client.input.MouseButtonEvent event, boolean doubleClick) {
         double mouseX = event.x(), mouseY = event.y(); int button = event.button();
+    //?} else {
+    /*public boolean mouseClicked(double mouseX, double mouseY, int button) {
+    *///?}
         if (button == 0) {
             Box box;
             int i;
@@ -80,11 +84,19 @@ extends Screen {
                 return true;
             }
         }
+        //? if >= 26.1 {
         return super.mouseClicked(event, doubleClick);
+        //?} else {
+        /*return super.mouseClicked(mouseX, mouseY, button);
+        *///?}
     }
 
+    //? if >= 26.1 {
     public boolean mouseDragged(net.minecraft.client.input.MouseButtonEvent event, double dx, double dy) {
         double mouseX = event.x(), mouseY = event.y(); int button = event.button();
+    //?} else {
+    /*public boolean mouseDragged(double mouseX, double mouseY, int button, double dx, double dy) {
+    *///?}
         if (this.resizing != null) {
             if (this.resizing.element.id.equals("mini_map")) {
                 int newSize = (int)Math.round(Math.max(mouseX - (double)this.resizing.x, mouseY - (double)this.resizing.y));
@@ -110,11 +122,19 @@ extends Screen {
             this.dragging.y = HudEditorScreen.clamp(snapped[1], 0, this.height - this.dragging.h);
             return true;
         }
+        //? if >= 26.1 {
         return super.mouseDragged(event, dx, dy);
+        //?} else {
+        /*return super.mouseDragged(mouseX, mouseY, button, dx, dy);
+        *///?}
     }
 
+    //? if >= 26.1 {
     public boolean mouseReleased(net.minecraft.client.input.MouseButtonEvent event) {
         double mouseX = event.x(), mouseY = event.y(); int button = event.button();
+    //?} else {
+    /*public boolean mouseReleased(double mouseX, double mouseY, int button) {
+    *///?}
         if (this.resizing != null) {
             if (this.resizing.element.id.equals("mini_map")) {
                 this.configManager.get().map.miniMapSize = this.resizing.w;
@@ -132,7 +152,11 @@ extends Screen {
             this.dragging = null;
             return true;
         }
+        //? if >= 26.1 {
         return super.mouseReleased(event);
+        //?} else {
+        /*return super.mouseReleased(mouseX, mouseY, button);
+        *///?}
     }
 
     private boolean inHandle(Box box, double mouseX, double mouseY) {
@@ -167,7 +191,11 @@ extends Screen {
         return new int[]{nx, ny};
     }
 
+    //? if >= 26.1 {
     public void extractRenderState(GuiGraphicsExtractor ctx, int mouseX, int mouseY, float delta) {
+    //?} else {
+    /*public void render(GuiGraphicsExtractor ctx, int mouseX, int mouseY, float delta) {
+    *///?}
         ctx.fill(0, 0, this.width, this.height, -871756782);
         ctx.fill(this.width / 2, 0, this.width / 2 + 1, this.height, 0x22FFFFFF);
         ctx.fill(0, this.height / 2, this.width, this.height / 2 + 1, 0x22FFFFFF);
@@ -195,19 +223,35 @@ extends Screen {
         }
         ctx.centeredText(this.font, (Component)Component.translatable((String)"zombiezcompanion.hud.editor.title"), this.width / 2, 14, -854792);
         ctx.centeredText(this.font, (Component)Component.translatable((String)"zombiezcompanion.hud.editor.hint"), this.width / 2, 28, -8353376);
+        //? if >= 26.1 {
         super.extractRenderState(ctx, mouseX, mouseY, delta);
+        //?} else {
+        /*super.render(ctx, mouseX, mouseY, delta);
+        *///?}
     }
 
+    //? if >= 26.1 {
     public void extractBackground(GuiGraphicsExtractor ctx, int mouseX, int mouseY, float delta) {
+    //?} else {
+    /*public void renderBackground(GuiGraphicsExtractor ctx, int mouseX, int mouseY, float delta) {
+    *///?}
     }
 
+    //? if >= 26.1 {
     public boolean keyPressed(net.minecraft.client.input.KeyEvent event) {
         int keyCode = event.key(), scanCode = event.scancode(), modifiers = event.modifiers();
+    //?} else {
+    /*public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
+    *///?}
         if (keyCode == 256) {
             this.onClose();
             return true;
         }
+        //? if >= 26.1 {
         return super.keyPressed(event);
+        //?} else {
+        /*return super.keyPressed(keyCode, scanCode, modifiers);
+        *///?}
     }
 
     public void onClose() {

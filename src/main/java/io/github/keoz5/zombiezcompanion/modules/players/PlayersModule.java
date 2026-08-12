@@ -9,6 +9,8 @@ import io.github.keoz5.zombiezcompanion.core.Module;
 import io.github.keoz5.zombiezcompanion.core.ModuleCategory;
 import io.github.keoz5.zombiezcompanion.core.ModuleContext;
 import io.github.keoz5.zombiezcompanion.core.ModuleManager;
+import io.github.keoz5.zombiezcompanion.modules.friends.FriendsModule;
+import io.github.keoz5.zombiezcompanion.modules.groups.GroupsModule;
 import io.github.keoz5.zombiezcompanion.modules.map.ZombieZDetector;
 import io.github.keoz5.zombiezcompanion.modules.players.PlayersOptionsScreen;
 import io.github.keoz5.zombiezcompanion.modules.stats.StatsModule;
@@ -35,15 +37,22 @@ public final class PlayersModule
 implements Module {
     public static final String ID = "players";
     private static final String ENDPOINT = ModInfo.API_BASE;
-    private static final long PRESENCE_INTERVAL_MS = 10000L;
-    private static final long PRESENCE_REFRESH_MS = 5000L;
+    private static final long PRESENCE_INTERVAL_MS = 5000L;
+    private static final long PRESENCE_REFRESH_MS = 2000L;
     private static final long LEADERBOARD_INTERVAL_MS = 60000L;
+    // Free-tier KV write budget: only broadcast on real movement, with a heartbeat to keep the 120s TTL alive.
+    private static final double PRESENCE_MOVE_THRESHOLD = 3.0;
+    private static final long PRESENCE_HEARTBEAT_MS = 90000L;
     private static final String SERVER_KEY = "rinaorc.com";
     private ConfigManager configManager;
     private long nextPresenceMs;
     private long nextRefreshMs;
     private long nextLeaderboardMs;
     private boolean presenceActive;
+    private double lastPostX;
+    private double lastPostZ;
+    private String lastPostDim = "";
+    private long lastPostMs;
     private static final Pattern PRESTIGE_RE = Pattern.compile("^\\s*\\[?(\\d+)\\]?\\s*");
     private static final Pattern NIV_SUFFIX_RE = Pattern.compile("\\s*Niv\\.?\\s*\\d+\\s*$");
 
@@ -128,15 +137,15 @@ implements Module {
         }
         PlayersConfig cfg = this.config();
         if (cfg.broadcastPosition && now >= this.nextPresenceMs) {
-            this.sendPresence(client);
-            this.nextPresenceMs = now + 10000L;
+            this.maybeSendPresence(client, now);
+            this.nextPresenceMs = now + PRESENCE_INTERVAL_MS;
         } else if (!cfg.broadcastPosition && this.presenceActive) {
             this.deletePresence();
             this.presenceActive = false;
         }
-        if (this.configManager.get().map.showModUsers && now >= this.nextRefreshMs) {
+        if ((this.configManager.get().map.showModUsers || FriendsModule.wantsPresenceRefresh() || GroupsModule.wantsPresenceRefresh()) && now >= this.nextRefreshMs) {
             this.refreshPresences();
-            this.nextRefreshMs = now + 5000L;
+            this.nextRefreshMs = now + PRESENCE_REFRESH_MS;
         }
         if (cfg.broadcastPosition && now >= this.nextLeaderboardMs) {
             this.sendLeaderboard(client);
@@ -209,11 +218,37 @@ implements Module {
         PresenceCache.clear();
     }
 
+    /**
+     * Broadcasts presence only when it matters, to stay within the free KV write tier: when the player
+     * first appears, has moved at least {@link #PRESENCE_MOVE_THRESHOLD} blocks, switched map, or when a
+     * heartbeat is due to refresh the server-side 120s TTL. Called at most once per {@link #PRESENCE_INTERVAL_MS}.
+     */
+    private void maybeSendPresence(Minecraft client, long now) {
+        if (client.player == null) {
+            return;
+        }
+        double x = client.player.getX();
+        double z = client.player.getZ();
+        String dim = client.level != null ? client.level.dimension().identifier().toString() : "";
+        boolean moved = Math.hypot(x - this.lastPostX, z - this.lastPostZ) >= PRESENCE_MOVE_THRESHOLD;
+        boolean dimChanged = !dim.equals(this.lastPostDim);
+        boolean heartbeat = now - this.lastPostMs >= PRESENCE_HEARTBEAT_MS;
+        if (!this.presenceActive || moved || dimChanged || heartbeat) {
+            this.sendPresence(client);
+            this.lastPostX = x;
+            this.lastPostZ = z;
+            this.lastPostDim = dim;
+            this.lastPostMs = now;
+        }
+    }
+
     private void sendPresence(Minecraft client) {
         if (client.player == null) {
             return;
         }
-        String body = String.format(Locale.ROOT, "{\"uuid\":\"%s\",\"name\":\"%s\",\"server\":\"%s\",\"x\":%.1f,\"z\":%.1f,\"modVersion\":\"%s\"}", PlayersModule.escape(this.selfUuid()), PlayersModule.escape(client.player.getName().getString()), SERVER_KEY, client.player.getX(), client.player.getZ(), PlayersModule.escape(PlayersModule.modVersion()));
+        String dim = client.level != null ? client.level.dimension().identifier().toString() : "";
+        String mcuuid = client.player.getUUID().toString();
+        String body = String.format(Locale.ROOT, "{\"uuid\":\"%s\",\"name\":\"%s\",\"server\":\"%s\",\"x\":%.1f,\"y\":%.1f,\"z\":%.1f,\"dim\":\"%s\",\"mcuuid\":\"%s\",\"modVersion\":\"%s\"}", PlayersModule.escape(this.selfUuid()), PlayersModule.escape(client.player.getName().getString()), SERVER_KEY, client.player.getX(), client.player.getY(), client.player.getZ(), PlayersModule.escape(dim), PlayersModule.escape(mcuuid), PlayersModule.escape(PlayersModule.modVersion()));
         this.postAsync(ModInfo.API_BASE + "/presence", body);
         this.presenceActive = true;
     }

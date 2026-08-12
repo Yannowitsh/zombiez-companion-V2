@@ -38,9 +38,12 @@ public final class PresenceCache {
                 if (uuid == null || uuid.equals(selfUuid)) continue;
                 String name = p.has("name") ? p.get("name").getAsString() : "?";
                 double x = p.has("x") ? p.get("x").getAsDouble() : 0.0;
+                double y = p.has("y") ? p.get("y").getAsDouble() : 0.0;
                 double z = p.has("z") ? p.get("z").getAsDouble() : 0.0;
+                String dim = p.has("dim") ? p.get("dim").getAsString() : "";
+                String mcuuid = p.has("mcuuid") ? p.get("mcuuid").getAsString() : "";
                 long lu = p.has("last_update") ? p.get("last_update").getAsLong() : 0L;
-                list.add(new Presence(uuid, name, x, z, lu));
+                list.add(new Presence(uuid, name, x, y, z, dim, mcuuid, lu));
             }
             presences = list;
         }
@@ -49,7 +52,7 @@ public final class PresenceCache {
         }
     }
 
-    public record Presence(String uuid, String name, double x, double z, long lastUpdate) {
+    public record Presence(String uuid, String name, double x, double y, double z, String dim, String mcuuid, long lastUpdate) {
     }
 }
 

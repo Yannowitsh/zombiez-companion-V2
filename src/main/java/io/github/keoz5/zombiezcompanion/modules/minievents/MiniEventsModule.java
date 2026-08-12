@@ -31,6 +31,7 @@ import java.text.Normalizer;
 import java.time.Duration;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -41,8 +42,13 @@ import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+//? if >= 26.1 {
 import net.fabricmc.fabric.api.client.rendering.v1.level.LevelRenderContext;
 import net.fabricmc.fabric.api.client.rendering.v1.level.LevelRenderEvents;
+//?} else {
+/*import net.fabricmc.fabric.api.client.rendering.v1.LevelRenderContext;
+import net.fabricmc.fabric.api.client.rendering.v1.LevelRenderEvents;
+*///?}
 import net.minecraft.client.Camera;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
@@ -51,7 +57,11 @@ import net.minecraft.client.gui.components.BossHealthOverlay;
 import net.minecraft.client.gui.components.LerpingBossEvent;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.renderer.MultiBufferSource;
+//? if >= 26.1 {
 import net.minecraft.client.renderer.rendertype.RenderType;
+//?} else {
+/*import net.minecraft.client.renderer.RenderType;
+*///?}
 import net.minecraft.client.renderer.culling.Frustum;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Vec3i;
@@ -159,7 +169,11 @@ implements Module {
     @Override
     public void onRegister(ModuleContext ctx) {
         this.configManager = ctx.configManager();
+        //? if >= 26.1 {
         LevelRenderEvents.AFTER_TRANSLUCENT_TERRAIN.register(this::renderBeacons);
+        //?} else {
+        /*LevelRenderEvents.AFTER_TRANSLUCENT.register(this::renderBeacons);
+        *///?}
     }
 
     @Override
@@ -511,7 +525,7 @@ implements Module {
         wp.x = (double)x + 0.5;
         wp.y = y;
         wp.z = (double)z + 0.5;
-        wp.colorRgb = MiniEventType.MARCHAND.colorRgb;
+        wp.colorRgb = MiniEventType.MARCHAND.color();
         wp.createdAt = now;
         wp.visible = true;
         wp.dimension = MiniEventsModule.dimensionForZone(zone);
@@ -601,12 +615,13 @@ implements Module {
         if (spawns == null || spawns.isEmpty()) {
             elapsedStr = "\u2014";
         } else {
-            long last = spawns.get(spawns.size() - 1);
+            long last = Collections.max(spawns);
             elapsedStr = MiniEventsModule.fmtDuration(now - last);
         }
-        // Only the time since the last witnessed spawn \u2014 no predicted "next spawn": the real
-        // server intervals are unknown, so any estimate would be misleading.
-        MutableComponent line = Component.translatable((String)labelKey, (Object[])new Object[]{elapsedStr});
+        // Elapsed since the last witnessed spawn, plus the observed min\u2013max interval computed from
+        // the shared spawn history (outlier-filtered so a missed spawn does not inflate the max).
+        String intervalStr = MiniEventsModule.intervalRange(spawns);
+        MutableComponent line = Component.translatable((String)labelKey, (Object[])new Object[]{elapsedStr, intervalStr});
         Font tr = client.font;
         int baseW = tr.width((FormattedText)line) + 12;
         int baseH = 16;
@@ -619,16 +634,85 @@ implements Module {
         int x = HudAnchor.resolveX(hud, elementId, screenW, sw, 0.0);
         int y = HudAnchor.resolveY(hud, elementId, screenH, sh, defaultFy);
         HudElements.report(elementId, x, y, sw, sh);
-        int accent = (boss ? MiniEventType.WORLD_BOSS.colorRgb : MiniEventType.MARCHAND.colorRgb) | 0xFF000000;
+        int accent = (boss ? MiniEventType.WORLD_BOSS.color() : MiniEventType.MARCHAND.color()) | 0xFF000000;
         ctx.pose().pushMatrix();
-        ctx.pose().translate((float)x, (float)y);
+        io.github.keoz5.zombiezcompanion.compat.ZCPose.translate(ctx, (float)x, (float)y);
         if (scale != 1.0) {
-            ctx.pose().scale((float)scale, (float)scale);
+            io.github.keoz5.zombiezcompanion.compat.ZCPose.scale(ctx, (float)scale, (float)scale);
         }
         ctx.fill(0, 0, baseW, baseH, -1442840576);
         ctx.fill(0, 0, baseW, 1, accent);
         ctx.text(tr, (Component)line, 6, 4, -1);
         ctx.pose().popMatrix();
+    }
+
+    public List<Long> spawnHistory(boolean boss) {
+        return this.effectiveSpawns(boss);
+    }
+
+    public int accentColor(boolean boss) {
+        return (boss ? MiniEventType.WORLD_BOSS.color() : MiniEventType.MARCHAND.color()) | 0xFF000000;
+    }
+
+    public String intervalRangeText(boolean boss) {
+        return MiniEventsModule.intervalRange(this.effectiveSpawns(boss));
+    }
+
+    public String medianText(boolean boss) {
+        Long m = MiniEventsModule.medianFilteredInterval(this.effectiveSpawns(boss));
+        return m == null ? "—" : MiniEventsModule.fmtDuration(m);
+    }
+
+    /**
+     * Draws the interval-distribution histogram (spawn count per minute bucket, scaled to the tallest
+     * bar) within the box (ox, oy, maxW, h), plus a white tick at the median minute. Filtered intervals.
+     * Draws nothing when there are fewer than 4 filtered intervals. Used by the module's options screen.
+     */
+    static void drawSpawnHistogram(GuiGraphicsExtractor ctx, int ox, int oy, int maxW, int h, List<Long> spawns, int accent) {
+        List<Long> iv = MiniEventsModule.filteredIntervals(spawns);
+        if (iv.size() < 4) {
+            return;
+        }
+        int lo = Integer.MAX_VALUE;
+        int hi = Integer.MIN_VALUE;
+        for (long d : iv) {
+            int m = (int)(d / 60000L);
+            if (m < lo) {
+                lo = m;
+            }
+            if (m > hi) {
+                hi = m;
+            }
+        }
+        if (hi < lo) {
+            return;
+        }
+        int span = hi - lo + 1;
+        int[] counts = new int[span];
+        for (long d : iv) {
+            ++counts[(int)(d / 60000L) - lo];
+        }
+        int maxc = 1;
+        for (int c : counts) {
+            if (c > maxc) {
+                maxc = c;
+            }
+        }
+        int barW = Math.max(1, Math.min(6, maxW / span));
+        int w = span * barW;
+        int bh = h - 2;
+        ctx.fill(ox, oy, ox + w + 1, oy + h, 0x66000000);
+        for (int i = 0; i < span; ++i) {
+            if (counts[i] == 0) continue;
+            int barHeight = Math.max(1, (int)Math.round((double)counts[i] / (double)maxc * (double)(bh - 1)));
+            int bx = ox + 1 + i * barW;
+            int by = oy + 1 + (bh - barHeight);
+            ctx.fill(bx, by, bx + Math.max(1, barW - 1), oy + 1 + bh, accent);
+        }
+        long med = MiniEventsModule.medianLong(iv);
+        int medMin = (int)(med / 60000L);
+        int mx = ox + 1 + Math.max(0, Math.min(span - 1, medMin - lo)) * barW + barW / 2;
+        ctx.fill(mx, oy + 1, mx + 1, oy + 1 + bh, 0xFFFFFFFF);
     }
 
     private static String fmtDuration(long ms) {
@@ -639,6 +723,83 @@ implements Module {
         long h = totalMin / 60L;
         long m = totalMin % 60L;
         return h + "h" + String.valueOf(m < 10L ? "0" + m : Long.valueOf(m));
+    }
+
+    /**
+     * Bidirectionally outlier-filtered intervals (ms) between consecutive spawns, or empty when there is
+     * not enough data (need >= 3 spawns for >= 2 intervals). Mirrors the backend {@code /spawns/stats}:
+     * sort, diff, then drop both likely missed-spawn gaps (> 2x median) and spurious short intervals
+     * (< 0.5x median) so neither end of the range is skewed by capture noise.
+     */
+    private static List<Long> filteredIntervals(List<Long> spawns) {
+        if (spawns == null || spawns.size() < 3) {
+            return List.of();
+        }
+        ArrayList<Long> sorted = new ArrayList<Long>(spawns);
+        Collections.sort(sorted);
+        ArrayList<Long> iv = new ArrayList<Long>();
+        for (int i = 1; i < sorted.size(); ++i) {
+            iv.add(sorted.get(i) - sorted.get(i - 1));
+        }
+        long med = MiniEventsModule.medianLong(iv);
+        ArrayList<Long> use = new ArrayList<Long>();
+        for (long d : iv) {
+            if (med > 0L && (d < med / 2L || d > 2L * med)) continue;
+            use.add(d);
+        }
+        return use.isEmpty() ? iv : use;
+    }
+
+    /** Observed "min–max" interval string, or "—" when there is not enough data. */
+    private static String intervalRange(List<Long> spawns) {
+        List<Long> use = MiniEventsModule.filteredIntervals(spawns);
+        if (use.isEmpty()) {
+            return "—";
+        }
+        long min = Long.MAX_VALUE;
+        long max = Long.MIN_VALUE;
+        for (long d : use) {
+            if (d < min) {
+                min = d;
+            }
+            if (d > max) {
+                max = d;
+            }
+        }
+        return MiniEventsModule.fmtDuration(min) + "–" + MiniEventsModule.fmtDuration(max);
+    }
+
+    /** Median of the filtered intervals (ms), or null when there is not enough data. */
+    private static Long medianFilteredInterval(List<Long> spawns) {
+        List<Long> use = MiniEventsModule.filteredIntervals(spawns);
+        if (use.isEmpty()) {
+            return null;
+        }
+        return MiniEventsModule.medianLong(use);
+    }
+
+    /**
+     * Estimated time-to-next-spawn (ms) = last witnessed spawn + median interval − now. Negative when the
+     * spawn is already "overdue". Null when there is not enough data. Used by the options screen only.
+     */
+    public Long nextProbableRemainingMs(boolean boss) {
+        List<Long> spawns = this.effectiveSpawns(boss);
+        Long med = MiniEventsModule.medianFilteredInterval(spawns);
+        if (med == null || spawns.isEmpty()) {
+            return null;
+        }
+        long last = Collections.max(spawns);
+        return last + med - System.currentTimeMillis();
+    }
+
+    private static long medianLong(List<Long> xs) {
+        if (xs.isEmpty()) {
+            return 0L;
+        }
+        ArrayList<Long> s = new ArrayList<Long>(xs);
+        Collections.sort(s);
+        int n = s.size();
+        return n % 2 == 1 ? s.get(n / 2) : (s.get(n / 2 - 1) + s.get(n / 2)) / 2L;
     }
 
     private void handleAssautLine(String ascii) {
@@ -674,7 +835,7 @@ implements Module {
         wp.x = (double)x + 0.5;
         wp.y = y;
         wp.z = (double)z + 0.5;
-        wp.colorRgb = MiniEventType.ASSAUT.colorRgb;
+        wp.colorRgb = MiniEventType.ASSAUT.color();
         wp.createdAt = now;
         wp.visible = true;
         // Assaut du Marché des Sables always spawns at a fixed location on map 1 (overworld).
@@ -764,7 +925,7 @@ implements Module {
         wp.x = (double)x + 0.5;
         wp.y = y;
         wp.z = (double)z + 0.5;
-        wp.colorRgb = MiniEventType.WORLD_BOSS.colorRgb;
+        wp.colorRgb = MiniEventType.WORLD_BOSS.color();
         wp.createdAt = now;
         wp.visible = true;
         wp.dimension = MiniEventsModule.dimensionForZone(zone);
@@ -889,7 +1050,7 @@ implements Module {
         wp.x = x;
         wp.y = y;
         wp.z = z;
-        wp.colorRgb = MiniEventType.FAILLE.colorRgb;
+        wp.colorRgb = MiniEventType.FAILLE.color();
         wp.createdAt = now;
         wp.visible = true;
         // Faille is detected from nearby live entities, so it belongs to the player's current dimension.
@@ -1023,16 +1184,20 @@ implements Module {
         }
         Camera camera = mc.gameRenderer.getMainCamera();
         Vec3 cam = camera.position();
+        //? if >= 26.1 {
         PoseStack matrices = ctx.poseStack();
+        //?} else {
+        /*PoseStack matrices = ctx.matrixStack();
+        *///?}
         MultiBufferSource.BufferSource immediate = mc.renderBuffers().bufferSource();
         boolean drewAny = false;
         matrices.pushPose();
         for (ActiveEvent ev : this.entityEvents.values()) {
-            WaypointsModule.drawBeacon(matrices, immediate, camera, cam, mc.font, ev.x, ev.y, ev.z, ev.label, 0xFF000000 | ev.type.colorRgb);
+            WaypointsModule.drawBeacon(matrices, immediate, camera, cam, mc.font, ev.x, ev.y, ev.z, ev.label, 0xFF000000 | ev.type.color());
             drewAny = true;
         }
         for (ActiveEvent ev : this.colisEvents.values()) {
-            WaypointsModule.drawBeacon(matrices, immediate, camera, cam, mc.font, ev.x, ev.y, ev.z, ev.label, 0xFF000000 | ev.type.colorRgb);
+            WaypointsModule.drawBeacon(matrices, immediate, camera, cam, mc.font, ev.x, ev.y, ev.z, ev.label, 0xFF000000 | ev.type.color());
             drewAny = true;
         }
         if (failleActive) {
@@ -1049,7 +1214,7 @@ implements Module {
         if (mc.player == null || mc.level == null) {
             return false;
         }
-        int color = 0xFF000000 | MiniEventType.FAILLE.colorRgb;
+        int color = 0xFF000000 | MiniEventType.FAILLE.color();
         boolean drew = false;
         List<LivingEntity> mobs = mc.level.getEntitiesOfClass(LivingEntity.class, mc.player.getBoundingBox().inflate(96.0), e -> !e.isRemoved() && !(e instanceof Player));
         for (LivingEntity mob : mobs) {
@@ -1095,8 +1260,16 @@ implements Module {
     }
 
     private static void edge(VertexConsumer lines, PoseStack.Pose entry, float x1, float y1, float z1, float x2, float y2, float z2, float r, float g, float b, float a) {
+        //? if >= 26.1 {
         lines.addVertex(entry, x1, y1, z1).setColor(r, g, b, a).setNormal(entry, 0.0f, 1.0f, 0.0f).setLineWidth(4.0f);
+        //?} else {
+        /*lines.addVertex(entry, x1, y1, z1).setColor(r, g, b, a).setNormal(entry, 0.0f, 1.0f, 0.0f);
+        *///?}
+        //? if >= 26.1 {
         lines.addVertex(entry, x2, y2, z2).setColor(r, g, b, a).setNormal(entry, 0.0f, 1.0f, 0.0f).setLineWidth(4.0f);
+        //?} else {
+        /*lines.addVertex(entry, x2, y2, z2).setColor(r, g, b, a).setNormal(entry, 0.0f, 1.0f, 0.0f);
+        *///?}
     }
 
     @Override
@@ -1120,10 +1293,10 @@ implements Module {
             return;
         }
         for (ActiveEvent ev : this.entityEvents.values()) {
-            WaypointsModule.renderScreenBeacon(ctx, client, tickDelta, ev.x, ev.y, ev.z, ev.label, 0xFF000000 | ev.type.colorRgb);
+            WaypointsModule.renderScreenBeacon(ctx, client, tickDelta, ev.x, ev.y, ev.z, ev.label, 0xFF000000 | ev.type.color());
         }
         for (ActiveEvent ev : this.colisEvents.values()) {
-            WaypointsModule.renderScreenBeacon(ctx, client, tickDelta, ev.x, ev.y, ev.z, ev.label, 0xFF000000 | ev.type.colorRgb);
+            WaypointsModule.renderScreenBeacon(ctx, client, tickDelta, ev.x, ev.y, ev.z, ev.label, 0xFF000000 | ev.type.color());
         }
         this.renderToasts(ctx, client);
     }
@@ -1163,9 +1336,9 @@ implements Module {
         int startY = HudAnchor.resolveY(hud, "mini_events_toast", screenH, scaledTotalH, 0.08);
         HudElements.report("mini_events_toast", originX, startY, scaledW, scaledTotalH);
         ctx.pose().pushMatrix();
-        ctx.pose().translate((float)originX, (float)startY);
+        io.github.keoz5.zombiezcompanion.compat.ZCPose.translate(ctx, (float)originX, (float)startY);
         if (scale != 1.0) {
-            ctx.pose().scale((float)scale, (float)scale);
+            io.github.keoz5.zombiezcompanion.compat.ZCPose.scale(ctx, (float)scale, (float)scale);
         }
         int i = 0;
         for (Toast t2 : this.toasts) {
@@ -1178,9 +1351,9 @@ implements Module {
             }
             int x = 0;
             int y = i * (boxH + gap);
-            int accent = a << 24 | t2.type.colorRgb & 0xFFFFFF;
+            int accent = a << 24 | t2.type.color() & 0xFFFFFF;
             int bg = (int)(alpha * 200.0f) << 24;
-            int border = (int)(alpha * 180.0f) << 24 | t2.type.colorRgb & 0xFFFFFF;
+            int border = (int)(alpha * 180.0f) << 24 | t2.type.color() & 0xFFFFFF;
             int textCol = a << 24 | 0xFFFFFF;
             ctx.fill(x, y, x + boxW, y + boxH, bg);
             ctx.fill(x, y, x + 3, y + boxH, accent);
@@ -1230,6 +1403,11 @@ implements Module {
             this.key = key;
             this.colorRgb = colorRgb;
             this.label = label;
+        }
+
+        /** Live display RGB: the player's override for this event type, else the built-in default. */
+        public int color() {
+            return io.github.keoz5.zombiezcompanion.ui.Colors.get(this.key, 0xFF000000 | this.colorRgb) & 0xFFFFFF;
         }
     }
 

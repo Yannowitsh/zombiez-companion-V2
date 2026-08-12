@@ -178,7 +178,11 @@ extends Screen {
         return target != null && "Waypoint".equals(target.type) && Math.abs(target.x - waypoint.x) < 0.01 && Math.abs(target.z - waypoint.z) < 0.01;
     }
 
+    //? if >= 26.1 {
     public void extractRenderState(GuiGraphicsExtractor ctx, int mouseX, int mouseY, float delta) {
+    //?} else {
+    /*public void render(GuiGraphicsExtractor ctx, int mouseX, int mouseY, float delta) {
+    *///?}
         ctx.fill(0, 0, this.width, this.height, -1610612736);
         int panelW = Math.max(204, Math.min(320, this.width - 16));
         int panelH = 228;
@@ -198,7 +202,11 @@ extends Screen {
             int selectedY = panelY + 128 + selectedIndex / 6 * 24;
             ctx.outline(selectedX - 2, selectedY, 26, 22, -8874241);
         }
+        //? if >= 26.1 {
         super.extractRenderState(ctx, mouseX, mouseY, delta);
+        //?} else {
+        /*super.render(ctx, mouseX, mouseY, delta);
+        *///?}
         this.drawInvalidBorder(ctx, this.xField, this.invalidX);
         this.drawInvalidBorder(ctx, this.yField, this.invalidY);
         this.drawInvalidBorder(ctx, this.zField, this.invalidZ);

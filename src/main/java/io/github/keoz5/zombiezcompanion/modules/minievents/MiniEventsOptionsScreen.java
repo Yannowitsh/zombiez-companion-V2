@@ -69,7 +69,7 @@ extends ModuleOptionsScreen {
         this.addToggle(x + half + gap, this.timersY + 14, (Component)Component.translatable((String)"zombiezcompanion.mini_events.toggle.world_boss_timer"), half, () -> this.config().worldBossTimer, v -> {
             this.config().worldBossTimer = v;
         });
-        this.keybindY = this.timersY + 56;
+        this.keybindY = this.timersY + 100;
         this.addKeybindRow(x, this.keybindY + 14, optionW, Keybinds.tpRefuge(), (Component)Component.translatable((String)"key.zombiezcompanion.tp_refuge"));
     }
 
@@ -90,14 +90,49 @@ extends ModuleOptionsScreen {
         return this.moduleRef.config();
     }
 
+    /** One event's stats block in the menu: probable next spawn, distribution histogram, range + median. */
+    private void drawSpawnBlock(GuiGraphicsExtractor ctx, int bx, int w, boolean boss) {
+        String labelKey = boss ? "zombiezcompanion.mini_events.next.world_boss" : "zombiezcompanion.mini_events.next.marchand";
+        ctx.text(this.font, (Component)Component.translatable((String)labelKey, (Object[])new Object[]{this.nextValue(boss)}), bx, this.timersY + 40, -8353376, false);
+        MiniEventsModule.drawSpawnHistogram(ctx, bx, this.timersY + 52, w, 28, this.moduleRef.spawnHistory(boss), this.moduleRef.accentColor(boss));
+        String med = Component.translatable((String)"zombiezcompanion.mini_events.median").getString();
+        String sub = this.moduleRef.intervalRangeText(boss) + "  ·  " + med + " " + this.moduleRef.medianText(boss);
+        ctx.text(this.font, (Component)Component.literal((String)sub), bx, this.timersY + 84, -8355712, false);
+    }
+
+    /** "dans ~Xm" / "en retard ~Xm" / "pas assez de données" for the probable next spawn. */
+    private Component nextValue(boolean boss) {
+        Long rem = this.moduleRef.nextProbableRemainingMs(boss);
+        if (rem == null) {
+            return Component.translatable((String)"zombiezcompanion.mini_events.next.nodata");
+        }
+        int m = (int)Math.round((double)Math.abs(rem.longValue()) / 60000.0);
+        return rem.longValue() > 0L
+            ? Component.translatable((String)"zombiezcompanion.mini_events.next.in", (Object[])new Object[]{m})
+            : Component.translatable((String)"zombiezcompanion.mini_events.next.overdue", (Object[])new Object[]{m});
+    }
+
     @Override
+    //? if >= 26.1 {
     public void extractRenderState(GuiGraphicsExtractor ctx, int mouseX, int mouseY, float delta) {
+    //?} else {
+    /*public void render(GuiGraphicsExtractor ctx, int mouseX, int mouseY, float delta) {
+    *///?}
+        //? if >= 26.1 {
         super.extractRenderState(ctx, mouseX, mouseY, delta);
+        //?} else {
+        /*super.render(ctx, mouseX, mouseY, delta);
+        *///?}
         int x = this.panelX1 + 36;
         ctx.text(this.font, (Component)Component.translatable((String)"zombiezcompanion.mini_events.options.header"), x, this.contentY1 + 12, -854792);
         ctx.text(this.font, (Component)Component.translatable((String)"zombiezcompanion.mini_events.section.events"), x, this.evY - 14, -8874241, false);
         ctx.text(this.font, (Component)Component.translatable((String)"zombiezcompanion.mini_events.section.timers"), x, this.timersY, -8874241, false);
-        ctx.text(this.font, (Component)Component.translatable((String)"zombiezcompanion.mini_events.options.hint"), x, this.timersY + 40, -8353376, false);
+        int gap = 18;
+        int optionW = Math.max(220, this.panelX2 - this.panelX1 - 72);
+        int half = Math.max(100, (optionW - gap) / 2);
+        int rx = x + half + gap;
+        this.drawSpawnBlock(ctx, x, half, false);
+        this.drawSpawnBlock(ctx, rx, half, true);
         ctx.text(this.font, (Component)Component.translatable((String)"zombiezcompanion.mini_events.section.keybind"), x, this.keybindY, -8874241, false);
     }
 
@@ -106,7 +141,7 @@ extends ModuleOptionsScreen {
         int x = this.panelX1 + 24;
         int y = this.contentY1 + 18;
         int w = this.panelX2 - this.panelX1 - 48;
-        int h = 296;
+        int h = 330;
         ctx.fill(x + 2, y + 3, x + w + 2, y + h + 3, -1442840576);
         ctx.fill(x, y, x + w, y + h, -267053025);
         ctx.fill(x, y, x + w, y + 2, -8874241);

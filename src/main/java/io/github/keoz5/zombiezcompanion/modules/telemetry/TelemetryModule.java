@@ -188,10 +188,18 @@ implements Module {
         }
         mc.gui.getChat().addClientSystemMessage((Component)Component.translatable((String)"zombiezcompanion.update.available", (Object[])new Object[]{this.latestVersion, local}).withStyle(ChatFormatting.GOLD));
         if (this.latestUrl != null && !this.latestUrl.isBlank()) {
+            //? if >= 26.1 {
             MutableComponent link = Component.translatable((String)"zombiezcompanion.update.download").setStyle(Style.EMPTY.withColor(ChatFormatting.AQUA).withUnderlined(Boolean.valueOf(true)).withClickEvent(new ClickEvent.OpenUrl(java.net.URI.create(this.latestUrl))));
+            //?} else {
+            /*MutableComponent link = Component.translatable((String)"zombiezcompanion.update.download").setStyle(Style.EMPTY.withColor(ChatFormatting.AQUA).withUnderlined(Boolean.valueOf(true)).withClickEvent(new ClickEvent(ClickEvent.Action.OPEN_URL, this.latestUrl)));
+            *///?}
             mc.gui.getChat().addClientSystemMessage((Component)link);
         }
+        //? if >= 26.1 {
         MutableComponent discord = Component.translatable((String)"zombiezcompanion.update.discord").setStyle(Style.EMPTY.withColor(ChatFormatting.AQUA).withUnderlined(Boolean.valueOf(true)).withClickEvent(new ClickEvent.OpenUrl(java.net.URI.create(ModInfo.DISCORD_URL))));
+        //?} else {
+        /*MutableComponent discord = Component.translatable((String)"zombiezcompanion.update.discord").setStyle(Style.EMPTY.withColor(ChatFormatting.AQUA).withUnderlined(Boolean.valueOf(true)).withClickEvent(new ClickEvent(ClickEvent.Action.OPEN_URL, ModInfo.DISCORD_URL)));
+        *///?}
         mc.gui.getChat().addClientSystemMessage((Component)discord);
         if (full) {
             mc.player.playSound(SoundEvents.EXPERIENCE_ORB_PICKUP, 0.6f, 1.4f);
@@ -216,8 +224,8 @@ implements Module {
         int half = textW / 2 + 12;
         float scale = 1.6f;
         ctx.pose().pushMatrix();
-        ctx.pose().translate((float)((double)sw / 2.0), (float)((double)sh * 0.3));
-        ctx.pose().scale(scale, scale);
+        io.github.keoz5.zombiezcompanion.compat.ZCPose.translate(ctx, (float)((double)sw / 2.0), (float)((double)sh * 0.3));
+        io.github.keoz5.zombiezcompanion.compat.ZCPose.scale(ctx, scale, scale);
         ctx.fill(-half, -4, half, 30, -804647918);
         ctx.fill(-half, -4, half, -1, -19712);
         ctx.outline(-half, -4, half * 2, 34, -19712);

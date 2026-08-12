@@ -10,6 +10,7 @@ import io.github.keoz5.zombiezcompanion.config.DropAlertConfig;
 import io.github.keoz5.zombiezcompanion.config.HudConfig;
 import io.github.keoz5.zombiezcompanion.config.MapConfig;
 import io.github.keoz5.zombiezcompanion.config.MiniEventsConfig;
+import io.github.keoz5.zombiezcompanion.config.MobSensorConfig;
 import io.github.keoz5.zombiezcompanion.config.ModConfig;
 import io.github.keoz5.zombiezcompanion.config.PlayersConfig;
 import io.github.keoz5.zombiezcompanion.config.SkullsConfig;
@@ -121,6 +122,20 @@ public final class ConfigManager {
         if (cfg.miniEvents == null) {
             cfg.miniEvents = new MiniEventsConfig();
         }
+        if (cfg.mobSensor == null) {
+            cfg.mobSensor = new MobSensorConfig();
+        }
+        if (cfg.mobSensor.tracks == null || cfg.mobSensor.tracks.isEmpty()) {
+            cfg.mobSensor.tracks = MobSensorConfig.defaultTracks();
+        }
+        while (cfg.mobSensor.tracks.size() < MobSensorConfig.SLOTS) {
+            cfg.mobSensor.tracks.add(new MobSensorConfig.Track());
+        }
+        for (MobSensorConfig.Track track : cfg.mobSensor.tracks) {
+            if (track != null && track.query == null) {
+                track.query = "";
+            }
+        }
         if (cfg.skulls == null) {
             cfg.skulls = new SkullsConfig();
         }
@@ -133,8 +148,20 @@ public final class ConfigManager {
         if (cfg.players == null) {
             cfg.players = new PlayersConfig();
         }
+        if (cfg.friends == null) {
+            cfg.friends = new FriendsConfig();
+        }
+        if (cfg.friends.hidden == null) {
+            cfg.friends.hidden = new ArrayList<String>();
+        }
         if (cfg.coordinates == null) {
             cfg.coordinates = new CoordinatesConfig();
+        }
+        if (cfg.colors == null) {
+            cfg.colors = new ColorsConfig();
+        }
+        if (cfg.colors.overrides == null) {
+            cfg.colors.overrides = new java.util.LinkedHashMap<String, Integer>();
         }
         if (cfg.hud == null) {
             cfg.hud = new HudConfig();

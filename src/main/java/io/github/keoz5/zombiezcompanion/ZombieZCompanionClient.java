@@ -12,18 +12,24 @@ import io.github.keoz5.zombiezcompanion.log.LogCategory;
 import io.github.keoz5.zombiezcompanion.modules.autotext.AutoTextModule;
 import io.github.keoz5.zombiezcompanion.modules.consumables.ConsumablesModule;
 import io.github.keoz5.zombiezcompanion.modules.dropalert.DropAlertModule;
+import io.github.keoz5.zombiezcompanion.modules.friends.FriendsModule;
+import io.github.keoz5.zombiezcompanion.modules.groups.GroupsModule;
 import io.github.keoz5.zombiezcompanion.modules.map.WaypointManagerScreen;
 import io.github.keoz5.zombiezcompanion.modules.map.WaypointsModule;
 import io.github.keoz5.zombiezcompanion.modules.map.ZombieZMapData;
 import io.github.keoz5.zombiezcompanion.modules.map.ZombieZMapScreen;
 import io.github.keoz5.zombiezcompanion.modules.minievents.MiniEventsModule;
+import io.github.keoz5.zombiezcompanion.modules.mobsensor.MobSensorModule;
 import io.github.keoz5.zombiezcompanion.modules.players.PlayersModule;
 import io.github.keoz5.zombiezcompanion.modules.skulls.SkullsManagerScreen;
 import io.github.keoz5.zombiezcompanion.modules.skulls.SkullsModule;
 import io.github.keoz5.zombiezcompanion.modules.stats.StatsModule;
 import io.github.keoz5.zombiezcompanion.modules.telemetry.TelemetryModule;
+import io.github.keoz5.zombiezcompanion.realtime.BroadcastToasts;
+import io.github.keoz5.zombiezcompanion.realtime.RealtimeClient;
 import io.github.keoz5.zombiezcompanion.ui.ConfigScreen;
 import io.github.keoz5.zombiezcompanion.ui.StatsScreen;
+import io.github.keoz5.zombiezcompanion.update.UpdateChecker;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
@@ -31,11 +37,18 @@ import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.message.v1.ClientReceiveMessageEvents;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
+//? if >= 26.1 {
 import net.fabricmc.fabric.api.client.rendering.v1.hud.HudElementRegistry;
+//?} else {
+/*import net.fabricmc.fabric.api.client.rendering.v1.HudRenderCallback;
+*///?}
 import net.minecraft.resources.Identifier;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.Font;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.network.chat.Component;
 
 public final class ZombieZCompanionClient
 implements ClientModInitializer {
@@ -70,7 +83,12 @@ implements ClientModInitializer {
             if (sm != null && moduleManager.isEnabled("skulls")) {
                 Minecraft.getInstance().setScreen((Screen)new SkullsManagerScreen(null, configManager, sm));
             }
-        }, ZombieZCompanionClient::tpToEventRefuge);
+        }, ZombieZCompanionClient::tpToEventRefuge, () -> {
+            GroupsModule gm = GroupsModule.get();
+            if (gm != null && moduleManager.isEnabled(GroupsModule.ID)) {
+                gm.onPingKey();
+            }
+        });
         moduleManager.startEnabledModules();
         configManager.save();
         Log.info("ZombieZ Companion initialized \u2014 " + moduleManager.modules().size() + " module(s), debug=" + ZombieZCompanionClient.configManager.get().debugMode);
@@ -83,6 +101,9 @@ implements ClientModInitializer {
         HudElements.register("world_boss_timer", "zombiezcompanion.hud.element.world_boss_timer", 150, 16, 0.0, 0.36, true);
         HudElements.register("lure_timer", "zombiezcompanion.hud.element.lure_timer", 110, 18, 0.0, 0.42, true);
         HudElements.register("flower_timer", "zombiezcompanion.hud.element.flower_timer", 150, 18, 0.0, 0.48, true);
+        HudElements.register("mutant_sensor", "zombiezcompanion.hud.element.mutant_sensor", 140, 16, 0.0, 0.54, true);
+        HudElements.register("auto_text_bar", "zombiezcompanion.hud.element.auto_text_bar", 100, 22, 0.01, 0.30, false);
+        HudElements.register("broadcast_toast", "zombiezcompanion.hud.element.broadcast_toast", 260, 40, 0.5, 0.12, true);
     }
 
     /**
@@ -120,16 +141,29 @@ implements ClientModInitializer {
         mm.register(new AutoTextModule());
         mm.register(new DropAlertModule());
         mm.register(new MiniEventsModule());
+        mm.register(new MobSensorModule());
         mm.register(new StatsModule());
         mm.register(new SkullsModule());
         mm.register(new TelemetryModule());
         mm.register(new PlayersModule());
+        mm.register(new FriendsModule());
+        mm.register(new GroupsModule());
         mm.register(new ConsumablesModule());
     }
 
     private void registerFabricHooks() {
         ClientTickEvents.END_CLIENT_TICK.register(moduleManager::onClientTick);
+        ClientTickEvents.END_CLIENT_TICK.register(client -> UpdateChecker.tick());
+        ClientTickEvents.END_CLIENT_TICK.register(RealtimeClient::tick);
+        //? if >= 26.1 {
         HudElementRegistry.addLast(Identifier.fromNamespaceAndPath("zombiezcompanion", "hud"), (drawContext, deltaTracker) -> moduleManager.onHudRender(drawContext, deltaTracker.getGameTimeDeltaPartialTick(true)));
+        HudElementRegistry.addLast(Identifier.fromNamespaceAndPath("zombiezcompanion", "update_banner"), (drawContext, deltaTracker) -> ZombieZCompanionClient.renderUpdateBanner(drawContext));
+        HudElementRegistry.addLast(Identifier.fromNamespaceAndPath("zombiezcompanion", "broadcast_toast"), (drawContext, deltaTracker) -> BroadcastToasts.render(drawContext));
+        //?} else {
+        /*HudRenderCallback.EVENT.register((drawContext, deltaTracker) -> moduleManager.onHudRender(drawContext, deltaTracker.getGameTimeDeltaPartialTick(true)));
+        HudRenderCallback.EVENT.register((drawContext, deltaTracker) -> ZombieZCompanionClient.renderUpdateBanner(drawContext));
+        HudRenderCallback.EVENT.register((drawContext, deltaTracker) -> BroadcastToasts.render(drawContext));
+        *///?}
         ClientReceiveMessageEvents.CHAT.register((message, signed, sender, params, timestamp) -> moduleManager.onChatMessage(message, false));
         ClientReceiveMessageEvents.GAME.register((message, overlay) -> {
             if (!overlay) {
@@ -139,8 +173,27 @@ implements ClientModInitializer {
         ClientPlayConnectionEvents.JOIN.register((handler, sender, client) -> moduleManager.onJoinWorld());
         ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> {
             moduleManager.onLeaveWorld();
+            RealtimeClient.close();
             configManager.save();
         });
+    }
+
+    private static void renderUpdateBanner(GuiGraphicsExtractor ctx) {
+        if (!UpdateChecker.available()) {
+            return;
+        }
+        Minecraft mc = Minecraft.getInstance();
+        if (mc.player == null || mc.screen != null || mc.options.hideGui) {
+            return;
+        }
+        Component line = Component.translatable((String)"zombiezcompanion.update.hud", (Object[])new Object[]{UpdateChecker.latestVersion()});
+        Font f = mc.font;
+        int w = f.width((net.minecraft.network.chat.FormattedText)line) + 16;
+        int x = (ctx.guiWidth() - w) / 2;
+        int y = 4;
+        ctx.fill(x, y, x + w, y + 14, -1442840576);
+        ctx.fill(x, y, x + w, y + 1, -256);
+        ctx.text(f, (Component)line, x + 8, y + 3, -256, false);
     }
 
     private static void tpToEventRefuge() {
@@ -181,6 +234,26 @@ implements ClientModInitializer {
         }
         int n = Math.max(0, r.order() - 1);
         Log.debug(LogCategory.EVENT, "quick-tp: player on map 1 -> refuge tp " + n);
+        mc.getConnection().sendCommand("refuge tp " + n);
+    }
+
+    /** Teleport toward an arbitrary world position via the nearest refuge (map 1) or the map-2 refuge. */
+    public static void quickTpTo(double x, double z, String dim) {
+        Minecraft mc = Minecraft.getInstance();
+        if (mc.player == null || mc.getConnection() == null) {
+            return;
+        }
+        if (ZombieZMapData.DIM_MAP2.equals(dim)) {
+            Log.debug(LogCategory.EVENT, "quick-tp: friend on map 2 -> refuge tp w2");
+            mc.getConnection().sendCommand("refuge tp w2");
+            return;
+        }
+        ZombieZMapData.Refuge r = ZombieZMapData.nearestRefuge(x, z);
+        if (r == null) {
+            return;
+        }
+        int n = Math.max(0, r.order() - 1);
+        Log.debug(LogCategory.EVENT, "quick-tp: friend on map 1 -> refuge tp " + n);
         mc.getConnection().sendCommand("refuge tp " + n);
     }
 
