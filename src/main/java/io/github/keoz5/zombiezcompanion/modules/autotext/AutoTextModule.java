@@ -187,7 +187,11 @@ implements Module {
         if (text.isEmpty()) {
             return;
         }
+        //? if >= 26.1 {
         client.setScreen((Screen)new ChatScreen(text, false));
+        //?} else {
+        /*client.setScreen((Screen)new ChatScreen(text));
+        *///?}
     }
 
     // --- Clickable chat bar -------------------------------------------------
@@ -250,6 +254,93 @@ implements Module {
             slotAutoSend.add(Boolean.valueOf(p.autoSend));
         }
         HudElements.report(BAR_ELEMENT, boxX, boxY, boxW, boxH);
+        // Chat open: preview a preset's content when the cursor hovers its icon, so you can see what
+        // you'll send before clicking.
+        if (chatOpen) {
+            AutoTextModule.renderHoverPreview(ctx, client);
+        }
+    }
+
+    /** Draws a tooltip with the hovered slot's text (only while the chat is open). */
+    private static void renderHoverPreview(GuiGraphicsExtractor ctx, Minecraft client) {
+        if (slotRects.isEmpty()) {
+            return;
+        }
+        int winW = client.getWindow().getWidth();
+        int winH = client.getWindow().getHeight();
+        if (winW <= 0 || winH <= 0) {
+            return;
+        }
+        int screenW = ctx.guiWidth();
+        int screenH = ctx.guiHeight();
+        int mx = (int)Math.round(client.mouseHandler.xpos() * (double)screenW / (double)winW);
+        int my = (int)Math.round(client.mouseHandler.ypos() * (double)screenH / (double)winH);
+        for (int i = 0; i < slotRects.size(); ++i) {
+            int[] r = slotRects.get(i);
+            if (mx >= r[0] && mx <= r[2] && my >= r[1] && my <= r[3]) {
+                AutoTextModule.drawPresetTooltip(ctx, client.font, slotTexts.get(i), mx, my, screenW, screenH);
+                return;
+            }
+        }
+    }
+
+    private static void drawPresetTooltip(GuiGraphicsExtractor ctx, net.minecraft.client.gui.Font font, String text, int mouseX, int mouseY, int screenW, int screenH) {
+        if (text == null || text.isBlank()) {
+            return;
+        }
+        int maxW = Math.min(240, screenW - 20);
+        List<String> lines = AutoTextModule.wrapText(font, text.trim(), maxW);
+        int textW = 0;
+        for (String ln : lines) {
+            textW = Math.max(textW, font.width(ln));
+        }
+        int pad = 4;
+        int lineH = font.lineHeight + 2;
+        int boxW = textW + pad * 2;
+        int boxH = lines.size() * lineH - 2 + pad * 2;
+        int bx = mouseX + 10;
+        int by = mouseY - boxH - 6;
+        if (bx + boxW > screenW) {
+            bx = screenW - boxW - 2;
+        }
+        if (bx < 2) {
+            bx = 2;
+        }
+        if (by < 2) {
+            by = mouseY + 12;
+        }
+        if (by + boxH > screenH) {
+            by = screenH - boxH - 2;
+        }
+        ctx.fill(bx, by, bx + boxW, by + boxH, 0xF0100018);
+        ctx.outline(bx, by, boxW, boxH, 0xFF7A4CD0);
+        int ty = by + pad;
+        for (String ln : lines) {
+            ctx.text(font, (Component)Component.literal((String)ln), bx + pad, ty, -1, false);
+            ty += lineH;
+        }
+    }
+
+    /** Greedy word-wrap of a raw string to a max pixel width, so long presets don't overflow the screen. */
+    private static List<String> wrapText(net.minecraft.client.gui.Font font, String text, int maxW) {
+        ArrayList<String> out = new ArrayList<String>();
+        StringBuilder cur = new StringBuilder();
+        for (String word : text.split(" ")) {
+            String cand = cur.length() == 0 ? word : cur + " " + word;
+            if (font.width(cand) > maxW && cur.length() > 0) {
+                out.add(cur.toString());
+                cur = new StringBuilder(word);
+            } else {
+                cur = new StringBuilder(cand);
+            }
+        }
+        if (cur.length() > 0) {
+            out.add(cur.toString());
+        }
+        if (out.isEmpty()) {
+            out.add(text);
+        }
+        return out;
     }
 
     /** Called by the ChatScreen mixin: if a bar slot was clicked, send it and consume the click. */

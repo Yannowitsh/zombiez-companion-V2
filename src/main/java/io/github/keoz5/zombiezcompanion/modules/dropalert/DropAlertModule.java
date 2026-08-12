@@ -26,8 +26,13 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+//? if >= 26.1 {
 import net.fabricmc.fabric.api.client.rendering.v1.level.LevelRenderContext;
 import net.fabricmc.fabric.api.client.rendering.v1.level.LevelRenderEvents;
+//?} else {
+/*import net.fabricmc.fabric.api.client.rendering.v1.LevelRenderContext;
+import net.fabricmc.fabric.api.client.rendering.v1.LevelRenderEvents;
+*///?}
 import net.minecraft.client.Camera;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
@@ -102,7 +107,11 @@ implements Module {
     @Override
     public void onRegister(ModuleContext ctx) {
         this.configManager = ctx.configManager();
+        //? if >= 26.1 {
         LevelRenderEvents.AFTER_TRANSLUCENT_TERRAIN.register(this::renderBeacon);
+        //?} else {
+        /*LevelRenderEvents.AFTER_TRANSLUCENT.register(this::renderBeacon);
+        *///?}
     }
 
     private void renderBeacon(LevelRenderContext ctx) {
@@ -121,7 +130,11 @@ implements Module {
         }
         Camera camera = mc.gameRenderer.getMainCamera();
         Vec3 cam = camera.position();
+        //? if >= 26.1 {
         PoseStack matrices = ctx.poseStack();
+        //?} else {
+        /*PoseStack matrices = ctx.matrixStack();
+        *///?}
         MultiBufferSource.BufferSource immediate = mc.renderBuffers().bufferSource();
         boolean drewAny = false;
         matrices.pushPose();
@@ -269,9 +282,9 @@ implements Module {
         int startY = HudAnchor.resolveY(hud, "drop_notifications", ctx.guiHeight(), scaledH, 0.5);
         HudElements.report("drop_notifications", leftX, startY, scaledW, scaledH);
         ctx.pose().pushMatrix();
-        ctx.pose().translate((float)leftX, (float)startY);
+        io.github.keoz5.zombiezcompanion.compat.ZCPose.translate(ctx, (float)leftX, (float)startY);
         if (scale != 1.0) {
-            ctx.pose().scale((float)scale, (float)scale);
+            io.github.keoz5.zombiezcompanion.compat.ZCPose.scale(ctx, (float)scale, (float)scale);
         }
         int index = 0;
         for (DropNotification notification2 : this.notifications) {
@@ -327,8 +340,8 @@ implements Module {
         ctx.fill(x, y, x + 4, y + h, color);
         ctx.outline(x, y, w, h, color);
         ctx.pose().pushMatrix();
-        ctx.pose().translate((float)(x + 20), (float)(y + 22));
-        ctx.pose().rotate((float)Math.toRadians((float)relative));
+        io.github.keoz5.zombiezcompanion.compat.ZCPose.translate(ctx, (float)(x + 20), (float)(y + 22));
+        io.github.keoz5.zombiezcompanion.compat.ZCPose.rotateZ(ctx, (float)Math.toRadians((float)relative));
         this.drawGuideArrow(ctx, color);
         ctx.pose().popMatrix();
         MutableComponent title = Component.translatable((String)"zombiezcompanion.drop_alert.guide.title");

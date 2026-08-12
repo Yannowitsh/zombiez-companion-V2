@@ -123,25 +123,45 @@ extends Screen {
         return true;
     }
 
+    //? if >= 26.1 {
     public void extractRenderState(GuiGraphicsExtractor ctx, int mouseX, int mouseY, float delta) {
+    //?} else {
+    /*public void render(GuiGraphicsExtractor ctx, int mouseX, int mouseY, float delta) {
+    *///?}
         ctx.fill(0, 0, this.width, this.height, -872415232);
         ctx.fill(this.panelX1, this.panelY1, this.panelX2, this.panelY2, -183627755);
         ctx.fill(this.panelX1, this.panelY1, this.panelX2, this.panelY1 + 2, -8874241);
         ctx.outline(this.panelX1, this.panelY1, this.panelX2 - this.panelX1, this.panelY2 - this.panelY1, -13880766);
         ctx.centeredText(this.font, (Component)Component.translatable((String)"zombiezcompanion.drop_alert.consumables.title"), (this.panelX1 + this.panelX2) / 2, this.panelY1 + 16, -854792);
+        //? if >= 26.1 {
         super.extractRenderState(ctx, mouseX, mouseY, delta);
+        //?} else {
+        /*super.render(ctx, mouseX, mouseY, delta);
+        *///?}
     }
 
+    //? if >= 26.1 {
     public void extractBackground(GuiGraphicsExtractor ctx, int mouseX, int mouseY, float delta) {
+    //?} else {
+    /*public void renderBackground(GuiGraphicsExtractor ctx, int mouseX, int mouseY, float delta) {
+    *///?}
     }
 
+    //? if >= 26.1 {
     public boolean keyPressed(net.minecraft.client.input.KeyEvent event) {
         int keyCode = event.key(), scanCode = event.scancode(), modifiers = event.modifiers();
+    //?} else {
+    /*public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
+    *///?}
         if (keyCode == 256) {
             this.onClose();
             return true;
         }
+        //? if >= 26.1 {
         return super.keyPressed(event);
+        //?} else {
+        /*return super.keyPressed(keyCode, scanCode, modifiers);
+        *///?}
     }
 
     public void onClose() {

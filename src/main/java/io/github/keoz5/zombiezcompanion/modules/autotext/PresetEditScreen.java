@@ -6,7 +6,6 @@ import io.github.keoz5.zombiezcompanion.ui.widget.StyledButton;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
-import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.network.chat.Component;
 
 /** Detail editor for one AutoText preset: name, item icon, bar visibility, auto-send, and slot colors. */
@@ -80,17 +79,28 @@ extends Screen {
     }
 
     @Override
-    public boolean mouseClicked(MouseButtonEvent event, boolean doubleClick) {
-        if (event.button() == 0) {
+    //? if >= 26.1 {
+    public boolean mouseClicked(net.minecraft.client.input.MouseButtonEvent event, boolean doubleClick) {
+        int button = event.button();
+        double mx = event.x();
+        double my = event.y();
+    //?} else {
+    /*public boolean mouseClicked(double mx, double my, int button) {
+    *///?}
+        if (button == 0) {
             int[] r = this.iconRect();
-            if (event.x() >= (double)r[0] && event.x() < (double)r[2] && event.y() >= (double)r[1] && event.y() < (double)r[3]) {
+            if (mx >= (double)r[0] && mx < (double)r[2] && my >= (double)r[1] && my < (double)r[3]) {
                 if (this.minecraft != null) {
                     this.minecraft.setScreen((Screen)new ItemPickerScreen((Screen)this, this.preset));
                 }
                 return true;
             }
         }
+        //? if >= 26.1 {
         return super.mouseClicked(event, doubleClick);
+        //?} else {
+        /*return super.mouseClicked(mx, my, button);
+        *///?}
     }
 
     private Component showInBarLabel() {
@@ -119,9 +129,17 @@ extends Screen {
     }
 
     @Override
+    //? if >= 26.1 {
     public void extractRenderState(GuiGraphicsExtractor ctx, int mouseX, int mouseY, float delta) {
+    //?} else {
+    /*public void render(GuiGraphicsExtractor ctx, int mouseX, int mouseY, float delta) {
+    *///?}
         ctx.fill(0, 0, this.width, this.height, -872415232);
+        //? if >= 26.1 {
         super.extractRenderState(ctx, mouseX, mouseY, delta);
+        //?} else {
+        /*super.render(ctx, mouseX, mouseY, delta);
+        *///?}
         int x = this.layoutX;
         int y = this.layoutY;
         int w = this.layoutW;

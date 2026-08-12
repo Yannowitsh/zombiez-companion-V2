@@ -71,7 +71,11 @@ extends Screen {
         int editorY = catY + 32;
         int editorW = this.panelX2 - this.panelX1 - 72;
         int editorH = this.contentY2 - editorY - 24;
+        //? if >= 26.1 {
         this.editor = new MultiLineEditBox.Builder().setX(this.panelX1 + 36).setY(editorY).setPlaceholder((Component)Component.translatable((String)"zombiezcompanion.feedback.placeholder")).build(this.font, editorW, editorH, (Component)Component.translatable((String)"zombiezcompanion.feedback.placeholder"));
+        //?} else {
+        /*this.editor = new MultiLineEditBox(this.font, this.panelX1 + 36, editorY, editorW, editorH, (Component)Component.translatable((String)"zombiezcompanion.feedback.placeholder"), (Component)Component.translatable((String)"zombiezcompanion.feedback.placeholder"));
+        *///?}
         this.editor.setCharacterLimit(5000);
         this.addRenderableWidget(this.editor);
         int btnH = 20;
@@ -170,7 +174,11 @@ extends Screen {
         });
     }
 
+    //? if >= 26.1 {
     public void extractRenderState(GuiGraphicsExtractor ctx, int mouseX, int mouseY, float delta) {
+    //?} else {
+    /*public void render(GuiGraphicsExtractor ctx, int mouseX, int mouseY, float delta) {
+    *///?}
         ctx.fill(0, 0, this.width, this.height, -872415232);
         ctx.fill(this.panelX1 + 3, this.panelY1 + 6, this.panelX2 + 3, this.panelY2 + 6, -1442840576);
         ctx.fill(this.panelX1, this.panelY1, this.panelX2, this.panelY2, -183627755);
@@ -189,7 +197,11 @@ extends Screen {
         ctx.fill(this.panelX1, this.panelY1 - 1, this.panelX2, this.panelY1, 1148753663);
         ctx.fill(this.panelX1 - 1, this.panelY1, this.panelX1, this.panelY2, 1148753663);
         ctx.fill(this.panelX2, this.panelY1, this.panelX2 + 1, this.panelY2, 1148753663);
+        //? if >= 26.1 {
         super.extractRenderState(ctx, mouseX, mouseY, delta);
+        //?} else {
+        /*super.render(ctx, mouseX, mouseY, delta);
+        *///?}
         ctx.text(this.font, (Component)Component.translatable((String)"zombiezcompanion.feedback.title"), this.panelX1 + 18, this.titleY1 + 10, -854792, true);
         ctx.text(this.font, (Component)Component.translatable((String)"zombiezcompanion.feedback.subtitle"), this.panelX1 + 18, this.titleY1 + 23, -8353376, false);
         ctx.text(this.font, (Component)Component.translatable((String)"zombiezcompanion.feedback.category"), this.panelX1 + 36, this.contentY1 + 14, -8874241, false);

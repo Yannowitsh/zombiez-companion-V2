@@ -473,7 +473,7 @@ implements Module {
         double depth = to.dot(forward);
         double xCam = to.dot(right);
         double yCam = to.dot(up);
-        double vfov = Math.toRadians(Math.max(12.0, Math.min(110.0, camera.getFov())));
+        double vfov = Math.toRadians(Math.max(12.0, Math.min(110.0, io.github.keoz5.zombiezcompanion.compat.ZCCompat.cameraFov(camera))));
         double aspect = (double)screenW / Math.max(1.0, (double)screenH);
         double xNorm;
         double yNorm;
@@ -511,7 +511,7 @@ implements Module {
         }
         double xCam = to.dot(right);
         double yCam = to.dot(up);
-        double vfov = Math.toRadians(Math.max(12.0, Math.min(110.0, camera.getFov())));
+        double vfov = Math.toRadians(Math.max(12.0, Math.min(110.0, io.github.keoz5.zombiezcompanion.compat.ZCCompat.cameraFov(camera))));
         double aspect = (double)screenW / Math.max(1.0, (double)screenH);
         double halfH = Math.tan(vfov / 2.0) * depth;
         double halfW = halfH * aspect;

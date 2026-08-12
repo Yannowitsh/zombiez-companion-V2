@@ -7,7 +7,6 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
-import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.network.chat.Component;
 
 /**
@@ -158,10 +157,15 @@ extends Screen {
 
     // --- input --------------------------------------------------------------
 
-    public boolean mouseClicked(MouseButtonEvent event, boolean doubleClick) {
+    //? if >= 26.1 {
+    public boolean mouseClicked(net.minecraft.client.input.MouseButtonEvent event, boolean doubleClick) {
+        int button = event.button();
         double mx = event.x();
         double my = event.y();
-        if (event.button() == 0) {
+    //?} else {
+    /*public boolean mouseClicked(double mx, double my, int button) {
+    *///?}
+        if (button == 0) {
             if (ColorPickerScreen.inRect(mx, my, this.svX, this.svY, this.svW, this.svH)) {
                 this.drag = DRAG_SV;
                 this.applySV(mx, my);
@@ -187,30 +191,52 @@ extends Screen {
                 }
             }
         }
+        //? if >= 26.1 {
         return super.mouseClicked(event, doubleClick);
+        //?} else {
+        /*return super.mouseClicked(mx, my, button);
+        *///?}
     }
 
-    public boolean mouseDragged(MouseButtonEvent event, double dx, double dy) {
+    //? if >= 26.1 {
+    public boolean mouseDragged(net.minecraft.client.input.MouseButtonEvent event, double dx, double dy) {
+        double mx = event.x();
+        double my = event.y();
+    //?} else {
+    /*public boolean mouseDragged(double mx, double my, int button, double dx, double dy) {
+    *///?}
         switch (this.drag) {
             case DRAG_SV: {
-                this.applySV(event.x(), event.y());
+                this.applySV(mx, my);
                 return true;
             }
             case DRAG_HUE: {
-                this.applyHue(event.y());
+                this.applyHue(my);
                 return true;
             }
             case DRAG_ALPHA: {
-                this.applyAlpha(event.x());
+                this.applyAlpha(mx);
                 return true;
             }
         }
+        //? if >= 26.1 {
         return super.mouseDragged(event, dx, dy);
+        //?} else {
+        /*return super.mouseDragged(mx, my, button, dx, dy);
+        *///?}
     }
 
-    public boolean mouseReleased(MouseButtonEvent event) {
+    //? if >= 26.1 {
+    public boolean mouseReleased(net.minecraft.client.input.MouseButtonEvent event) {
+    //?} else {
+    /*public boolean mouseReleased(double mx, double my, int button) {
+    *///?}
         this.drag = DRAG_NONE;
+        //? if >= 26.1 {
         return super.mouseReleased(event);
+        //?} else {
+        /*return super.mouseReleased(mx, my, button);
+        *///?}
     }
 
     private void applySV(double mx, double my) {
@@ -231,7 +257,11 @@ extends Screen {
 
     // --- render -------------------------------------------------------------
 
+    //? if >= 26.1 {
     public void extractRenderState(GuiGraphicsExtractor ctx, int mouseX, int mouseY, float delta) {
+    //?} else {
+    /*public void render(GuiGraphicsExtractor ctx, int mouseX, int mouseY, float delta) {
+    *///?}
         ctx.fill(0, 0, this.width, this.height, -872415232);
         ctx.fill(this.panelX1 + 3, this.panelY1 + 6, this.panelX2 + 3, this.panelY2 + 6, -1442840576);
         ctx.fill(this.panelX1, this.panelY1, this.panelX2, this.panelY2, -183627755);
@@ -249,7 +279,11 @@ extends Screen {
         this.drawAlphaBar(ctx);
         this.drawPreview(ctx);
         this.drawPalette(ctx);
+        //? if >= 26.1 {
         super.extractRenderState(ctx, mouseX, mouseY, delta);
+        //?} else {
+        /*super.render(ctx, mouseX, mouseY, delta);
+        *///?}
     }
 
     private void drawSvSquare(GuiGraphicsExtractor ctx) {

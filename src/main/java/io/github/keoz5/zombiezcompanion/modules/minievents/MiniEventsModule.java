@@ -42,8 +42,13 @@ import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+//? if >= 26.1 {
 import net.fabricmc.fabric.api.client.rendering.v1.level.LevelRenderContext;
 import net.fabricmc.fabric.api.client.rendering.v1.level.LevelRenderEvents;
+//?} else {
+/*import net.fabricmc.fabric.api.client.rendering.v1.LevelRenderContext;
+import net.fabricmc.fabric.api.client.rendering.v1.LevelRenderEvents;
+*///?}
 import net.minecraft.client.Camera;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
@@ -52,7 +57,11 @@ import net.minecraft.client.gui.components.BossHealthOverlay;
 import net.minecraft.client.gui.components.LerpingBossEvent;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.renderer.MultiBufferSource;
+//? if >= 26.1 {
 import net.minecraft.client.renderer.rendertype.RenderType;
+//?} else {
+/*import net.minecraft.client.renderer.RenderType;
+*///?}
 import net.minecraft.client.renderer.culling.Frustum;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Vec3i;
@@ -160,7 +169,11 @@ implements Module {
     @Override
     public void onRegister(ModuleContext ctx) {
         this.configManager = ctx.configManager();
+        //? if >= 26.1 {
         LevelRenderEvents.AFTER_TRANSLUCENT_TERRAIN.register(this::renderBeacons);
+        //?} else {
+        /*LevelRenderEvents.AFTER_TRANSLUCENT.register(this::renderBeacons);
+        *///?}
     }
 
     @Override
@@ -623,9 +636,9 @@ implements Module {
         HudElements.report(elementId, x, y, sw, sh);
         int accent = (boss ? MiniEventType.WORLD_BOSS.color() : MiniEventType.MARCHAND.color()) | 0xFF000000;
         ctx.pose().pushMatrix();
-        ctx.pose().translate((float)x, (float)y);
+        io.github.keoz5.zombiezcompanion.compat.ZCPose.translate(ctx, (float)x, (float)y);
         if (scale != 1.0) {
-            ctx.pose().scale((float)scale, (float)scale);
+            io.github.keoz5.zombiezcompanion.compat.ZCPose.scale(ctx, (float)scale, (float)scale);
         }
         ctx.fill(0, 0, baseW, baseH, -1442840576);
         ctx.fill(0, 0, baseW, 1, accent);
@@ -1171,7 +1184,11 @@ implements Module {
         }
         Camera camera = mc.gameRenderer.getMainCamera();
         Vec3 cam = camera.position();
+        //? if >= 26.1 {
         PoseStack matrices = ctx.poseStack();
+        //?} else {
+        /*PoseStack matrices = ctx.matrixStack();
+        *///?}
         MultiBufferSource.BufferSource immediate = mc.renderBuffers().bufferSource();
         boolean drewAny = false;
         matrices.pushPose();
@@ -1243,8 +1260,16 @@ implements Module {
     }
 
     private static void edge(VertexConsumer lines, PoseStack.Pose entry, float x1, float y1, float z1, float x2, float y2, float z2, float r, float g, float b, float a) {
+        //? if >= 26.1 {
         lines.addVertex(entry, x1, y1, z1).setColor(r, g, b, a).setNormal(entry, 0.0f, 1.0f, 0.0f).setLineWidth(4.0f);
+        //?} else {
+        /*lines.addVertex(entry, x1, y1, z1).setColor(r, g, b, a).setNormal(entry, 0.0f, 1.0f, 0.0f);
+        *///?}
+        //? if >= 26.1 {
         lines.addVertex(entry, x2, y2, z2).setColor(r, g, b, a).setNormal(entry, 0.0f, 1.0f, 0.0f).setLineWidth(4.0f);
+        //?} else {
+        /*lines.addVertex(entry, x2, y2, z2).setColor(r, g, b, a).setNormal(entry, 0.0f, 1.0f, 0.0f);
+        *///?}
     }
 
     @Override
@@ -1311,9 +1336,9 @@ implements Module {
         int startY = HudAnchor.resolveY(hud, "mini_events_toast", screenH, scaledTotalH, 0.08);
         HudElements.report("mini_events_toast", originX, startY, scaledW, scaledTotalH);
         ctx.pose().pushMatrix();
-        ctx.pose().translate((float)originX, (float)startY);
+        io.github.keoz5.zombiezcompanion.compat.ZCPose.translate(ctx, (float)originX, (float)startY);
         if (scale != 1.0) {
-            ctx.pose().scale((float)scale, (float)scale);
+            io.github.keoz5.zombiezcompanion.compat.ZCPose.scale(ctx, (float)scale, (float)scale);
         }
         int i = 0;
         for (Toast t2 : this.toasts) {

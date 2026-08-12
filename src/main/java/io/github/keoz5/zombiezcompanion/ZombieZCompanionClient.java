@@ -37,7 +37,11 @@ import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.message.v1.ClientReceiveMessageEvents;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
+//? if >= 26.1 {
 import net.fabricmc.fabric.api.client.rendering.v1.hud.HudElementRegistry;
+//?} else {
+/*import net.fabricmc.fabric.api.client.rendering.v1.HudRenderCallback;
+*///?}
 import net.minecraft.resources.Identifier;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.client.Minecraft;
@@ -151,9 +155,15 @@ implements ClientModInitializer {
         ClientTickEvents.END_CLIENT_TICK.register(moduleManager::onClientTick);
         ClientTickEvents.END_CLIENT_TICK.register(client -> UpdateChecker.tick());
         ClientTickEvents.END_CLIENT_TICK.register(RealtimeClient::tick);
+        //? if >= 26.1 {
         HudElementRegistry.addLast(Identifier.fromNamespaceAndPath("zombiezcompanion", "hud"), (drawContext, deltaTracker) -> moduleManager.onHudRender(drawContext, deltaTracker.getGameTimeDeltaPartialTick(true)));
         HudElementRegistry.addLast(Identifier.fromNamespaceAndPath("zombiezcompanion", "update_banner"), (drawContext, deltaTracker) -> ZombieZCompanionClient.renderUpdateBanner(drawContext));
         HudElementRegistry.addLast(Identifier.fromNamespaceAndPath("zombiezcompanion", "broadcast_toast"), (drawContext, deltaTracker) -> BroadcastToasts.render(drawContext));
+        //?} else {
+        /*HudRenderCallback.EVENT.register((drawContext, deltaTracker) -> moduleManager.onHudRender(drawContext, deltaTracker.getGameTimeDeltaPartialTick(true)));
+        HudRenderCallback.EVENT.register((drawContext, deltaTracker) -> ZombieZCompanionClient.renderUpdateBanner(drawContext));
+        HudRenderCallback.EVENT.register((drawContext, deltaTracker) -> BroadcastToasts.render(drawContext));
+        *///?}
         ClientReceiveMessageEvents.CHAT.register((message, signed, sender, params, timestamp) -> moduleManager.onChatMessage(message, false));
         ClientReceiveMessageEvents.GAME.register((message, overlay) -> {
             if (!overlay) {

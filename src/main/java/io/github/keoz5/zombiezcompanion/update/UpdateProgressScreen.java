@@ -65,8 +65,16 @@ extends Screen {
     }
 
     @Override
+    //? if >= 26.1 {
     public void extractRenderState(GuiGraphicsExtractor ctx, int mouseX, int mouseY, float delta) {
+    //?} else {
+    /*public void render(GuiGraphicsExtractor ctx, int mouseX, int mouseY, float delta) {
+    *///?}
+        //? if >= 26.1 {
         super.extractRenderState(ctx, mouseX, mouseY, delta);
+        //?} else {
+        /*super.render(ctx, mouseX, mouseY, delta);
+        *///?}
         int cx = this.width / 2;
         int cy = this.height / 2;
         this.centered(ctx, (Component)Component.translatable((String)"zombiezcompanion.update.screen.title"), cx, cy - 40, -854792);

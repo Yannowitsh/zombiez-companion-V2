@@ -89,7 +89,11 @@ extends Screen {
         }
     }
 
+    //? if >= 26.1 {
     public void extractRenderState(GuiGraphicsExtractor ctx, int mouseX, int mouseY, float delta) {
+    //?} else {
+    /*public void render(GuiGraphicsExtractor ctx, int mouseX, int mouseY, float delta) {
+    *///?}
         ctx.fill(0, 0, this.width, this.height, -872415232);
         ctx.fill(this.panelX + 2, this.panelY + 4, this.panelX + this.panelW + 2, this.panelY + this.panelH + 4, -1442840576);
         ctx.fill(this.panelX, this.panelY, this.panelX + this.panelW, this.panelY + this.panelH, -183627755);
@@ -117,7 +121,11 @@ extends Screen {
                 this.renderEconomyTab(ctx, cx, contentTop, cw, contentBottom);
             }
         }
+        //? if >= 26.1 {
         super.extractRenderState(ctx, mouseX, mouseY, delta);
+        //?} else {
+        /*super.render(ctx, mouseX, mouseY, delta);
+        *///?}
     }
 
     private void renderItemsTab(GuiGraphicsExtractor ctx, int x, int top, int w, int bottom) {
@@ -337,16 +345,28 @@ extends Screen {
         return s + "s";
     }
 
+    //? if >= 26.1 {
     public void extractBackground(GuiGraphicsExtractor ctx, int mouseX, int mouseY, float delta) {
+    //?} else {
+    /*public void renderBackground(GuiGraphicsExtractor ctx, int mouseX, int mouseY, float delta) {
+    *///?}
     }
 
+    //? if >= 26.1 {
     public boolean keyPressed(net.minecraft.client.input.KeyEvent event) {
         int keyCode = event.key(), scanCode = event.scancode(), modifiers = event.modifiers();
+    //?} else {
+    /*public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
+    *///?}
         if (keyCode == 256) {
             this.onClose();
             return true;
         }
+        //? if >= 26.1 {
         return super.keyPressed(event);
+        //?} else {
+        /*return super.keyPressed(keyCode, scanCode, modifiers);
+        *///?}
     }
 
     public void onClose() {

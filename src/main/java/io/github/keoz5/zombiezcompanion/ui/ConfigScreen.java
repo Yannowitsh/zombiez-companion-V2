@@ -272,7 +272,11 @@ extends Screen {
         }
     }
 
+    //? if >= 26.1 {
     public void extractRenderState(GuiGraphicsExtractor ctx, int mouseX, int mouseY, float delta) {
+    //?} else {
+    /*public void render(GuiGraphicsExtractor ctx, int mouseX, int mouseY, float delta) {
+    *///?}
         ctx.fill(0, 0, this.width, this.height, -872415232);
         ctx.fill(this.panelX1 + 3, this.panelY1 + 6, this.panelX2 + 3, this.panelY2 + 6, -1442840576);
         ctx.fill(this.panelX1, this.panelY1, this.panelX2, this.panelY2, -183627755);
@@ -303,7 +307,7 @@ extends Screen {
             int yOff = ConfigScreen.cardAnimY(elapsed, i);
             if (yOff != 0) {
                 ctx.pose().pushMatrix();
-                ctx.pose().translate(0.0f, (float)yOff);
+                io.github.keoz5.zombiezcompanion.compat.ZCPose.translate(ctx, 0.0f, (float)yOff);
             }
             this.drawCardBackground(ctx, c, mouseX, mouseY - yOff);
             if (yOff == 0) continue;
@@ -319,7 +323,11 @@ extends Screen {
             ctx.centeredText(this.font, (Component)primary, cx, cy, -8353376);
             ctx.centeredText(this.font, (Component)hint, cx, cy + 12, -12235684);
         }
+        //? if >= 26.1 {
         super.extractRenderState(ctx, mouseX, mouseY, delta);
+        //?} else {
+        /*super.render(ctx, mouseX, mouseY, delta);
+        *///?}
         this.renderForegroundText(ctx);
         this.renderCardTooltip(ctx, mouseX, mouseY);
     }
@@ -372,7 +380,7 @@ extends Screen {
             int yOff = ConfigScreen.cardAnimY(elapsedG, i);
             if (yOff != 0) {
                 ctx.pose().pushMatrix();
-                ctx.pose().translate(0.0f, (float)yOff);
+                io.github.keoz5.zombiezcompanion.compat.ZCPose.translate(ctx, 0.0f, (float)yOff);
             }
             int x = c.x + 77;
             this.drawModuleGlyph(ctx, c.module, x, c.y + 16);

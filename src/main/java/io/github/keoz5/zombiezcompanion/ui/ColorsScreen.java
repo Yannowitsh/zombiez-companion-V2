@@ -7,7 +7,6 @@ import java.util.List;
 import java.util.Locale;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.screens.Screen;
-import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.network.chat.Component;
 
 /**
@@ -76,10 +75,15 @@ extends Screen {
         this.contentY1 = this.titleY2;
     }
 
-    public boolean mouseClicked(MouseButtonEvent event, boolean doubleClick) {
-        if (event.button() == 1) {
-            double mx = event.x();
-            double my = event.y();
+    //? if >= 26.1 {
+    public boolean mouseClicked(net.minecraft.client.input.MouseButtonEvent event, boolean doubleClick) {
+        int button = event.button();
+        double mx = event.x();
+        double my = event.y();
+    //?} else {
+    /*public boolean mouseClicked(double mx, double my, int button) {
+    *///?}
+        if (button == 1) {
             for (Row r : this.rows) {
                 StyledButton b = r.btn();
                 if (mx < (double)b.getX() || mx >= (double)(b.getX() + b.getWidth()) || my < (double)b.getY() || my >= (double)(b.getY() + b.getHeight())) continue;
@@ -88,10 +92,18 @@ extends Screen {
                 return true;
             }
         }
+        //? if >= 26.1 {
         return super.mouseClicked(event, doubleClick);
+        //?} else {
+        /*return super.mouseClicked(mx, my, button);
+        *///?}
     }
 
+    //? if >= 26.1 {
     public void extractRenderState(GuiGraphicsExtractor ctx, int mouseX, int mouseY, float delta) {
+    //?} else {
+    /*public void render(GuiGraphicsExtractor ctx, int mouseX, int mouseY, float delta) {
+    *///?}
         ctx.fill(0, 0, this.width, this.height, -872415232);
         ctx.fill(this.panelX1 + 3, this.panelY1 + 6, this.panelX2 + 3, this.panelY2 + 6, -1442840576);
         ctx.fill(this.panelX1, this.panelY1, this.panelX2, this.panelY2, -183627755);
@@ -105,7 +117,11 @@ extends Screen {
         ctx.fill(this.panelX2 - 1, this.panelY1 + 1, this.panelX2, this.panelY2 - 1, -13880766);
         ctx.text(this.font, (Component)Component.translatable((String)"zombiezcompanion.colors.title"), this.panelX1 + 18, this.titleY1 + 16, -854792, true);
         ctx.text(this.font, (Component)Component.translatable((String)"zombiezcompanion.colors.hint"), this.panelX1 + 24, this.contentY1 + 10, -8353376, false);
+        //? if >= 26.1 {
         super.extractRenderState(ctx, mouseX, mouseY, delta);
+        //?} else {
+        /*super.render(ctx, mouseX, mouseY, delta);
+        *///?}
         for (Row r : this.rows) {
             StyledButton b = r.btn();
             int c = 0xFF000000 | Colors.get(r.el().id(), r.el().def());

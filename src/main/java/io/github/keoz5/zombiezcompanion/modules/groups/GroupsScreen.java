@@ -201,7 +201,23 @@ extends ModuleOptionsScreen {
                 int bx = right;
                 bx -= 64; if (fm != null) this.button(bx, y, 64, 18, (Component)Component.translatable((String)"zombiezcompanion.friends.btn.remove"), b -> fm.removeFriend(uuid), RED_A, RED_B);
                 if (canInvite && !members.contains(uuid)) {
-                    bx -= 4 + 88; this.button(bx, y, 88, 18, (Component)Component.translatable((String)"zombiezcompanion.groups.btn.invite"), b -> this.moduleRef.invite(uuid, name), GREEN_A, GREEN_B);
+                    bx -= 4 + 88;
+                    boolean pending = this.moduleRef.invitePending(uuid);
+                    Component inviteLabel = pending
+                        ? (Component)Component.translatable((String)"zombiezcompanion.groups.btn.invited")
+                        : (Component)Component.translatable((String)"zombiezcompanion.groups.btn.invite");
+                    StyledButton inviteBtn = this.button(bx, y, 88, 18, inviteLabel, b -> {
+                        if (this.moduleRef.invitePending(uuid)) {
+                            return;
+                        }
+                        this.moduleRef.invite(uuid, name);
+                        b.setMessage((Component)Component.translatable((String)"zombiezcompanion.groups.btn.invited"));
+                        ((StyledButton)b).setColors(GREY_A, GREY_B);
+                        b.active = false;
+                    }, pending ? GREY_A : GREEN_A, pending ? GREY_B : GREEN_B);
+                    if (pending) {
+                        inviteBtn.active = false;
+                    }
                 }
                 y += 22;
                 ++shown;
@@ -329,8 +345,16 @@ extends ModuleOptionsScreen {
     }
 
     @Override
+    //? if >= 26.1 {
     public void extractRenderState(GuiGraphicsExtractor ctx, int mouseX, int mouseY, float delta) {
+    //?} else {
+    /*public void render(GuiGraphicsExtractor ctx, int mouseX, int mouseY, float delta) {
+    *///?}
+        //? if >= 26.1 {
         super.extractRenderState(ctx, mouseX, mouseY, delta);
+        //?} else {
+        /*super.render(ctx, mouseX, mouseY, delta);
+        *///?}
         ctx.text(this.font, (Component)Component.translatable((String)"zombiezcompanion.groups.header"), this.panelX1 + 30, this.contentY1 + 2, ACCENT, false);
         for (Label l : this.labels) {
             ctx.text(this.font, l.text, l.x, l.y, l.color, false);

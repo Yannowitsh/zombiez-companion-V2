@@ -186,9 +186,9 @@ implements Module {
         int boxX = HudAnchor.resolveX(hud, elementId, screenW, scaledW, defFx);
         int boxY = HudAnchor.resolveY(hud, elementId, screenH, scaledH, defFy);
         ctx.pose().pushMatrix();
-        ctx.pose().translate((float)boxX, (float)boxY);
+        io.github.keoz5.zombiezcompanion.compat.ZCPose.translate(ctx, (float)boxX, (float)boxY);
         if (scale != 1.0) {
-            ctx.pose().scale((float)scale, (float)scale);
+            io.github.keoz5.zombiezcompanion.compat.ZCPose.scale(ctx, (float)scale, (float)scale);
         }
         ctx.fill(0, 0, boxW, boxH, -1073741824);
         ctx.fill(0, 0, boxW, 1, accent);

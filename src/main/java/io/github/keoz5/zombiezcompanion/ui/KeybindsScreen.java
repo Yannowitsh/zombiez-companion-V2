@@ -91,8 +91,12 @@ extends Screen {
         return kb.getTranslatedKeyMessage();
     }
 
+    //? if >= 26.1 {
     public boolean keyPressed(net.minecraft.client.input.KeyEvent event) {
         int keyCode = event.key(), scanCode = event.scancode(), modifiers = event.modifiers();
+    //?} else {
+    /*public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
+    *///?}
         if (this.listening != null) {
             if (keyCode == 256) {
                 this.listening = null;
@@ -109,11 +113,19 @@ extends Screen {
             this.onClose();
             return true;
         }
+        //? if >= 26.1 {
         return super.keyPressed(event);
+        //?} else {
+        /*return super.keyPressed(keyCode, scanCode, modifiers);
+        *///?}
     }
 
+    //? if >= 26.1 {
     public boolean mouseClicked(net.minecraft.client.input.MouseButtonEvent event, boolean doubleClick) {
         double mouseX = event.x(), mouseY = event.y(); int button = event.button();
+    //?} else {
+    /*public boolean mouseClicked(double mouseX, double mouseY, int button) {
+    *///?}
         if (this.listening != null) {
             this.listening.setKey(InputConstants.Type.MOUSE.getOrCreate(button));
             this.listening = null;
@@ -128,7 +140,11 @@ extends Screen {
                 return true;
             }
         }
+        //? if >= 26.1 {
         return super.mouseClicked(event, doubleClick);
+        //?} else {
+        /*return super.mouseClicked(mouseX, mouseY, button);
+        *///?}
     }
 
     private void saveAndRefresh() {
@@ -142,7 +158,11 @@ extends Screen {
         }
     }
 
+    //? if >= 26.1 {
     public void extractRenderState(GuiGraphicsExtractor ctx, int mouseX, int mouseY, float delta) {
+    //?} else {
+    /*public void render(GuiGraphicsExtractor ctx, int mouseX, int mouseY, float delta) {
+    *///?}
         ctx.fill(0, 0, this.width, this.height, -872415232);
         ctx.fill(this.panelX1, this.panelY1, this.panelX2, this.panelY2, -183627755);
         ctx.fill(this.panelX1, this.titleY1, this.panelX2, this.titleY2, -183232737);
@@ -162,7 +182,11 @@ extends Screen {
             if (!this.isDuplicate(r.binding)) continue;
             ctx.outline(r.keyBtn.getX() - 1, r.keyBtn.getY() - 1, r.keyBtn.getWidth() + 2, r.keyBtn.getHeight() + 2, -1096636);
         }
+        //? if >= 26.1 {
         super.extractRenderState(ctx, mouseX, mouseY, delta);
+        //?} else {
+        /*super.render(ctx, mouseX, mouseY, delta);
+        *///?}
     }
 
     private boolean isDuplicate(KeyMapping target) {

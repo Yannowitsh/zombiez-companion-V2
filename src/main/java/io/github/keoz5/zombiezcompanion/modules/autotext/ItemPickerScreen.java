@@ -8,7 +8,6 @@ import java.util.Locale;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
-import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
@@ -100,10 +99,15 @@ extends Screen {
     }
 
     @Override
-    public boolean mouseClicked(MouseButtonEvent event, boolean doubleClick) {
-        if (event.button() == 0) {
-            double mx = event.x();
-            double my = event.y();
+    //? if >= 26.1 {
+    public boolean mouseClicked(net.minecraft.client.input.MouseButtonEvent event, boolean doubleClick) {
+        int button = event.button();
+        double mx = event.x();
+        double my = event.y();
+    //?} else {
+    /*public boolean mouseClicked(double mx, double my, int button) {
+    *///?}
+        if (button == 0) {
             if (mx >= (double)this.gridX1 && mx < (double)(this.gridX1 + this.cols * CELL) && my >= (double)this.gridY1 && my < (double)(this.gridY1 + this.visibleRows * CELL)) {
                 int col = (int)((mx - (double)this.gridX1) / (double)CELL);
                 int row = this.scrollRow + (int)((my - (double)this.gridY1) / (double)CELL);
@@ -117,7 +121,11 @@ extends Screen {
                 }
             }
         }
+        //? if >= 26.1 {
         return super.mouseClicked(event, doubleClick);
+        //?} else {
+        /*return super.mouseClicked(mx, my, button);
+        *///?}
     }
 
     @Override
@@ -128,13 +136,21 @@ extends Screen {
     }
 
     @Override
+    //? if >= 26.1 {
     public void extractRenderState(GuiGraphicsExtractor ctx, int mouseX, int mouseY, float delta) {
+    //?} else {
+    /*public void render(GuiGraphicsExtractor ctx, int mouseX, int mouseY, float delta) {
+    *///?}
         ctx.fill(0, 0, this.width, this.height, -872415232);
         ctx.fill(this.panelX1 + 3, this.panelY1 + 6, this.panelX2 + 3, this.panelY2 + 6, -1442840576);
         ctx.fill(this.panelX1, this.panelY1, this.panelX2, this.panelY2, -183627755);
         ctx.fill(this.panelX1, this.footerY1, this.panelX2, this.footerY1 + 1, -14736594);
         ctx.outline(this.gridX1 - 1, this.gridY1 - 1, this.cols * CELL + 2, this.visibleRows * CELL + 2, -14736594);
+        //? if >= 26.1 {
         super.extractRenderState(ctx, mouseX, mouseY, delta);
+        //?} else {
+        /*super.render(ctx, mouseX, mouseY, delta);
+        *///?}
         ctx.text(this.font, (Component)Component.translatable((String)"zombiezcompanion.autotext.pick.title"), this.panelX1 + 12, this.panelY1 + 36, -854792, false);
 
         ItemEntry hovered = null;

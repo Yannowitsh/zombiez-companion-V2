@@ -2,7 +2,7 @@
   "required": true,
   "minVersion": "0.8",
   "package": "io.github.keoz5.zombiezcompanion.mixin",
-  "compatibilityLevel": "JAVA_25",
+  "compatibilityLevel": "JAVA_${java_dep}",
   "client": [
     "BossBarHudAccessor",
     "ChatScreenMixin",

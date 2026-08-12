@@ -458,6 +458,7 @@
   "zombiezcompanion.groups.full": "Group is full",
   "zombiezcompanion.groups.no_candidates": "No friend to invite (add them as friends first)",
   "zombiezcompanion.groups.btn.invite": "Invite",
+  "zombiezcompanion.groups.btn.invited": "Invitation sent",
   "zombiezcompanion.groups.member_note": "Only the chief can invite or kick members.",
   "zombiezcompanion.groups.toggle.follow_chief": "Follow chief (refuge TP)",
   "zombiezcompanion.groups.toggle.dungeon_auto": "Auto group dungeon",

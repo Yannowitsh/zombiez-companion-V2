@@ -33,8 +33,11 @@ latest.log
 /*.jar
 play.rinaorc.com.json
 
-# Local build archive (kept for personal version history, never committed)
-Versions/
+# Local build archive (kept for personal version history, never committed).
+# NB: Stonecutter also uses versions/<id>/ for its per-version build config, which
+# MUST be committed — so ignore only the archived artifacts, not the whole dir.
+Versions/*.jar
+Versions/CHANGELOG.md
 
 # Cloudflare Worker (backend) — local cache / deps / dev secrets
 backend/.wrangler/

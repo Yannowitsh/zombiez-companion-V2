@@ -16,16 +16,25 @@ import java.util.Date;
 import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
+//? if >= 26.1 {
 import net.fabricmc.fabric.api.client.rendering.v1.level.LevelRenderContext;
 import net.fabricmc.fabric.api.client.rendering.v1.level.LevelRenderEvents;
+//?} else {
+/*import net.fabricmc.fabric.api.client.rendering.v1.LevelRenderContext;
+import net.fabricmc.fabric.api.client.rendering.v1.LevelRenderEvents;
+*///?}
 import net.minecraft.client.Camera;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.renderer.MultiBufferSource;
+//? if >= 26.1 {
 import net.minecraft.client.renderer.rendertype.RenderType;
 import net.minecraft.client.renderer.rendertype.RenderTypes;
+//?} else {
+/*import net.minecraft.client.renderer.RenderType;
+*///?}
 import net.minecraft.client.renderer.culling.Frustum;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.FormattedText;
@@ -90,7 +99,11 @@ implements Module {
     @Override
     public void onRegister(ModuleContext ctx) {
         this.configManager = ctx.configManager();
+        //? if >= 26.1 {
         LevelRenderEvents.AFTER_TRANSLUCENT_TERRAIN.register(this::renderBeacons);
+        //?} else {
+        /*LevelRenderEvents.AFTER_TRANSLUCENT.register(this::renderBeacons);
+        *///?}
     }
 
     private void renderBeacons(LevelRenderContext ctx) {
@@ -110,7 +123,11 @@ implements Module {
         }
         Camera camera = client.gameRenderer.getMainCamera();
         Vec3 cam = camera.position();
+        //? if >= 26.1 {
         PoseStack matrices = ctx.poseStack();
+        //?} else {
+        /*PoseStack matrices = ctx.matrixStack();
+        *///?}
         MultiBufferSource.BufferSource immediate = client.renderBuffers().bufferSource();
         Font tr = client.font;
         String currentDim = WaypointsModule.currentDimensionId(client);
@@ -213,8 +230,16 @@ implements Module {
     }
 
     private static void drawLine(VertexConsumer lines, PoseStack.Pose entry, float x1, float y1, float z1, float x2, float y2, float z2, float r, float g, float b, float a) {
+        //? if >= 26.1 {
         lines.addVertex(entry, x1, y1, z1).setColor(r, g, b, a).setNormal(entry, 0.0f, 1.0f, 0.0f).setLineWidth(4.0f);
+        //?} else {
+        /*lines.addVertex(entry, x1, y1, z1).setColor(r, g, b, a).setNormal(entry, 0.0f, 1.0f, 0.0f);
+        *///?}
+        //? if >= 26.1 {
         lines.addVertex(entry, x2, y2, z2).setColor(r, g, b, a).setNormal(entry, 0.0f, 1.0f, 0.0f).setLineWidth(4.0f);
+        //?} else {
+        /*lines.addVertex(entry, x2, y2, z2).setColor(r, g, b, a).setNormal(entry, 0.0f, 1.0f, 0.0f);
+        *///?}
     }
 
     @Override
@@ -345,7 +370,7 @@ implements Module {
         double depth = toTarget.dot(forward);
         double xCamera = toTarget.dot(right);
         double yCamera = toTarget.dot(up);
-        double verticalFov = Math.toRadians(WaypointsModule.clamp((double)camera.getFov(), 12.0, 110.0));
+        double verticalFov = Math.toRadians(WaypointsModule.clamp((double)io.github.keoz5.zombiezcompanion.compat.ZCCompat.cameraFov(camera), 12.0, 110.0));
         double aspect = (double)screenW / Math.max(1.0, (double)screenH);
         if (depth > 0.05) {
             double halfHeight = Math.tan(verticalFov / 2.0) * depth;
@@ -415,8 +440,8 @@ implements Module {
         ctx.fill(x, y, x + boxW, y + boxH, -183627755);
         ctx.outline(x, y, boxW, boxH, -8874241);
         ctx.pose().pushMatrix();
-        ctx.pose().translate((float)(x + 12), (float)(y + 11));
-        ctx.pose().rotate((float)Math.toRadians((float)relativeAngle));
+        io.github.keoz5.zombiezcompanion.compat.ZCPose.translate(ctx, (float)(x + 12), (float)(y + 11));
+        io.github.keoz5.zombiezcompanion.compat.ZCPose.rotateZ(ctx, (float)Math.toRadians((float)relativeAngle));
         this.drawGuideArrow(ctx, 0xFF000000 | target.colorRgb);
         ctx.pose().popMatrix();
         ctx.text(textRenderer, (Component)label, x + 26, y + 7, -1);

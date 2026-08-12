@@ -359,7 +359,7 @@ implements Module {
         }
         double xCam = to.dot(right);
         double yCam = to.dot(up);
-        double vfov = Math.toRadians(MobSensorModule.clamp(camera.getFov(), 12.0, 110.0));
+        double vfov = Math.toRadians(MobSensorModule.clamp(io.github.keoz5.zombiezcompanion.compat.ZCCompat.cameraFov(camera), 12.0, 110.0));
         double aspect = (double)screenW / Math.max(1.0, (double)screenH);
         double halfH = Math.tan(vfov / 2.0) * depth;
         double halfW = halfH * aspect;
@@ -392,9 +392,9 @@ implements Module {
         HudElements.report(HUD_ELEMENT, x, y, sw, sh);
         int accent = 0xFF000000 | (Colors.get("mutant_frame", MUTANT_FRAME_DEFAULT) & 0xFFFFFF);
         ctx.pose().pushMatrix();
-        ctx.pose().translate((float)x, (float)y);
+        io.github.keoz5.zombiezcompanion.compat.ZCPose.translate(ctx, (float)x, (float)y);
         if (scale != 1.0) {
-            ctx.pose().scale((float)scale, (float)scale);
+            io.github.keoz5.zombiezcompanion.compat.ZCPose.scale(ctx, (float)scale, (float)scale);
         }
         ctx.fill(0, 0, baseW, baseH, -1442840576);
         ctx.fill(0, 0, baseW, 1, accent);

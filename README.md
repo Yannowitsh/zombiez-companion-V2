@@ -4,11 +4,11 @@ Client-side, read-only quality-of-life companion mod for the **ZombieZ** Minecra
 Provides modular overlays and helpers (minimap, waypoints, event beacons/timers, HUD, etc.);
 it never automates gameplay.
 
-- **Minecraft:** 26.1.2
-- **Mod loader:** Fabric Loader ≥ 0.19.3
-- **Java:** 25
-- **Mappings:** official Mojang mappings (bundled — Minecraft 26.1+ ships deobfuscated, no mappings dependency)
-- **Build:** Fabric Loom 1.17.19
+- **Minecraft:** 26.1.2 **and** 1.21.4 (single Stonecutter source → one jar per version)
+- **Mod loader:** Fabric Loader ≥ 0.16.10 (1.21.4) / ≥ 0.19.3 (26.1.2)
+- **Java:** 21 (1.21.4) / 25 (26.1.2)
+- **Mappings:** official Mojang mappings (26.1.2 ships deobfuscated; 1.21.4 uses Mojmap via architectury-loom)
+- **Build:** Stonecutter 0.9 — Fabric Loom 1.17.19 (26.1.2) / architectury-loom (1.21.4). `./gradlew "Set active project to <id>-fabric"` then `build`.
 
 ## Building
 
@@ -40,8 +40,25 @@ This is a full rewrite that adds support for the server's second, instanced map
 
 ## Notes de version
 
-Historique des modifications par version (branche **26.1.2**). Nom du jar :
-`zombiezcompanionV2-<version_minecraft>-<version_mod>`.
+Historique des modifications par version. Nom du jar :
+`zombiezcompanionV2-<version_minecraft>-<version_mod>`. Depuis 1.8.0, deux jars par version
+(26.1.2 et 1.21.4) ; l'updater in-mod lit le canal correspondant (branche `26.1.2` ou `master`).
+
+### 1.8.0
+- **Support multi-version (26.1.2 + 1.21.4)** : le mod se construit désormais pour **deux versions de
+  Minecraft** à partir d'une seule base de code (Stonecutter). Les joueurs en **1.21.4** ont leur propre
+  jar et reçoivent les mises à jour (canal `master`), en plus de la 26.1.2. Parité complète des
+  fonctionnalités entre les deux versions.
+- **Groupe — confirmation d'invitation** : le bouton « Inviter » passe à **« Invitation envoyée »**
+  après le clic, pour confirmer que la demande est partie.
+- **Groupe — suivi du chef sur tout téléport refuge** : les membres suivent maintenant aussi quand le
+  chef choisit un refuge via le **menu `/refuge`** ou fait **`/spawn`** (avant : uniquement la commande
+  `/refuge tp <n>`). Détection par position, **armée par l'ouverture de `/refuge`** pour ne jamais suivre
+  un sort/blink.
+- **Groupe — auto-join de donjon instantané** : plus d'attente avant de rejoindre (le chef valide déjà
+  le lancement).
+- **AutoText — aperçu au survol** : chat ouvert, **survoler une icône de preset** dans la barre affiche
+  un aperçu du **texte/commande** avant de cliquer.
 
 ### 1.7.0
 - **AutoText — envoi auto par preset** : nouvelle option **« Envoi auto »** dans l'éditeur d'un preset.

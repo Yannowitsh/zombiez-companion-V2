@@ -458,6 +458,7 @@
   "zombiezcompanion.groups.full": "Groupe complet",
   "zombiezcompanion.groups.no_candidates": "Aucun ami à inviter (ajoute-les d'abord en ami)",
   "zombiezcompanion.groups.btn.invite": "Inviter",
+  "zombiezcompanion.groups.btn.invited": "Invitation envoyée",
   "zombiezcompanion.groups.member_note": "Seul le chef peut inviter ou exclure des membres.",
   "zombiezcompanion.groups.toggle.follow_chief": "Suivre le chef (TP refuge)",
   "zombiezcompanion.groups.toggle.dungeon_auto": "Donjon de groupe auto",

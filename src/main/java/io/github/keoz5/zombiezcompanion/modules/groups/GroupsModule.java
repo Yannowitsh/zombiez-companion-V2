@@ -15,14 +15,17 @@ import io.github.keoz5.zombiezcompanion.log.LogCategory;
 import io.github.keoz5.zombiezcompanion.modules.friends.FriendsModule;
 import io.github.keoz5.zombiezcompanion.modules.map.WaypointsModule;
 import io.github.keoz5.zombiezcompanion.modules.map.ZombieZDetector;
+import io.github.keoz5.zombiezcompanion.modules.map.ZombieZMapData;
 import io.github.keoz5.zombiezcompanion.net.HttpClients;
 import io.github.keoz5.zombiezcompanion.realtime.RealtimeClient;
 import java.net.URI;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import net.fabricmc.fabric.api.client.message.v1.ClientSendMessageEvents;
@@ -59,8 +62,13 @@ implements Module {
     public static final int CHIEF_COLOR = 0xFFFFC83D;
     /** Shared-ping marker tint (magenta). */
     public static final int PING_COLOR = 0xFFFF3DAE;
-    /** Countdown (ms) before an auto group-dungeon join fires, so the player can cancel (sneak). */
-    private static final long DUNGEON_COUNTDOWN_MS = 3000L;
+    /** Delay (ms) before an auto group-dungeon join fires. The chief already validates the launch, so we
+     * join immediately (0); the tick loop still lets a sneaking player cancel before the next tick. */
+    private static final long DUNGEON_COUNTDOWN_MS = 0L;
+    /** A single-tick position jump larger than this (blocks) counts as a teleport for follow-chief. */
+    private static final double TELEPORT_DIST_SQ = 30.0 * 30.0;
+    /** After the chief opens the /refuge menu, watch this long for the resulting teleport (menu follow). */
+    private static final long REFUGE_ARM_MS = 30000L;
     /** How long a "<chief> lance un Donjon" line stays valid to pair with the following "REJOINDRE" line. */
     private static final long DUNGEON_PAIR_WINDOW_MS = 6000L;
     /** Matches the server broadcast "⚔ <pseudo> lance un Donjon Niv. N !" (accent-insensitive on "Donjon"). */
@@ -78,6 +86,18 @@ implements Module {
     private long lastDungeonAt;
     private String pendingJoinCmd;
     private long joinCountdownEndMs;
+    // Follow-chief position tracking: detects a teleport into a refuge (covers the /refuge HUD menu, not
+    // just the "refuge tp <n>" command). Deduped so the same destination isn't broadcast twice.
+    private double lastX;
+    private double lastY;
+    private double lastZ;
+    private boolean havePos;
+    private String lastRefugeArg = "";
+    private long lastRefugeBroadcastMs;
+    // Set when the chief opens /refuge; a teleport before this deadline is treated as a refuge selection.
+    private long refugeArmedUntil;
+    // Invite feedback: uuid -> time the local player invited them, so the UI shows "Invitation envoyée".
+    private final Map<String, Long> invitedAt = new HashMap<String, Long>();
 
     @Override
     public String id() {
@@ -124,19 +144,43 @@ implements Module {
         }
     }
 
-    /** Called when the local player sends a command (without leading slash). */
+    /** Called when the local player sends a command (without leading slash). Only the chief broadcasts. */
     private void onCommandSent(String command) {
-        if (command == null) {
+        if (command == null || !this.isChief()) {
             return;
         }
         String c = command.trim();
-        // Match "refuge tp <arg>" (arg is a refuge number or "w2").
-        if (c.startsWith("refuge tp ") && this.isChief()) {
-            String arg = c.substring("refuge tp ".length()).trim();
+        String lc = c.toLowerCase(Locale.ROOT);
+        if (lc.equals("refuge")) {
+            // Chief opened the refuge menu: watch for the resulting teleport for a short while, so a menu
+            // pick is followed just like the explicit command. A spell/blink outside this window is ignored.
+            this.refugeArmedUntil = System.currentTimeMillis() + REFUGE_ARM_MS;
+        } else if (lc.startsWith("refuge tp ")) {
+            // Explicit command (also covers the second-map "w2" refuge): pass the arg through verbatim.
+            String arg = lc.substring("refuge tp ".length()).trim();
             if (!arg.isEmpty()) {
-                this.postAction("refuge", arg);
+                this.broadcastRefuge(arg);
             }
+        } else if (lc.equals("spawn")) {
+            // /spawn is the same place as "refuge tp 0"; followers use refuge tp 0 to dodge the /spawn cooldown.
+            this.broadcastRefuge("0");
         }
+    }
+
+    /** Broadcast the chief's refuge destination to followers. Each teleport already yields a single
+     * broadcast (command / menu / spawn are separate paths), so we only swallow a literal same-tick
+     * duplicate — deliberate re-teleports, even to the same refuge, still go through. */
+    private void broadcastRefuge(String arg) {
+        if (arg == null || arg.isEmpty()) {
+            return;
+        }
+        long now = System.currentTimeMillis();
+        if (arg.equals(this.lastRefugeArg) && now - this.lastRefugeBroadcastMs < 500L) {
+            return;
+        }
+        this.lastRefugeArg = arg;
+        this.lastRefugeBroadcastMs = now;
+        this.postAction("refuge", arg);
     }
 
     @Override
@@ -184,6 +228,27 @@ implements Module {
         if (client.player == null || client.level == null || !ZombieZDetector.isOnZombieZ()) {
             return;
         }
+        // Follow-chief (menu-safe): only while the /refuge menu window is armed, treat a large jump landing
+        // in a refuge as a menu selection and broadcast it. Gating on /refuge means spells/blinks are ignored.
+        double px = client.player.getX();
+        double py = client.player.getY();
+        double pz = client.player.getZ();
+        if (this.havePos && this.isChief() && System.currentTimeMillis() < this.refugeArmedUntil) {
+            double dx = px - this.lastX;
+            double dy = py - this.lastY;
+            double dz = pz - this.lastZ;
+            if (dx * dx + dy * dy + dz * dz > TELEPORT_DIST_SQ && ZombieZMapData.isInAnyRefuge(px, pz)) {
+                ZombieZMapData.Refuge r = ZombieZMapData.nearestRefuge(px, pz);
+                if (r != null) {
+                    this.refugeArmedUntil = 0L; // consume the window so we broadcast the arrival only once
+                    this.broadcastRefuge(String.valueOf(r.order() - 1));
+                }
+            }
+        }
+        this.lastX = px;
+        this.lastY = py;
+        this.lastZ = pz;
+        this.havePos = true;
         long now = System.currentTimeMillis();
         if (now >= this.nextPollMs) {
             this.refresh();
@@ -213,6 +278,8 @@ implements Module {
         GroupsCache.clear();
         PingCache.clear();
         this.pendingJoinCmd = null;
+        this.havePos = false;
+        this.refugeArmedUntil = 0L;
     }
 
     @Override
@@ -376,9 +443,15 @@ implements Module {
         Style s = c.getStyle();
         if (s != null) {
             ClickEvent ce = s.getClickEvent();
+            //? if >= 26.1 {
             if (ce instanceof ClickEvent.RunCommand rc) {
                 return rc.command();
             }
+            //?} else {
+            /*if (ce != null && ce.getAction() == ClickEvent.Action.RUN_COMMAND) {
+                return ce.getValue();
+            }
+            *///?}
         }
         for (Component sib : c.getSiblings()) {
             String r = GroupsModule.findClickCommand(sib);
@@ -470,8 +543,15 @@ implements Module {
         if (self == null || toUuid == null || toUuid.equals(self)) {
             return;
         }
+        this.invitedAt.put(toUuid, System.currentTimeMillis());
         String body = String.format(Locale.ROOT, "{\"uuid\":\"%s\",\"name\":\"%s\",\"to\":\"%s\",\"toName\":\"%s\"}", esc(self), esc(selfName()), esc(toUuid), esc(toName));
         this.postThenRefresh(ModInfo.API_BASE + "/group/invite", body);
+    }
+
+    /** True if we invited this player recently, so the directory shows "Invitation envoyée" instead of the button. */
+    public boolean invitePending(String uuid) {
+        Long t = this.invitedAt.get(uuid);
+        return t != null && System.currentTimeMillis() - t < 120000L;
     }
 
     public void acceptInvite(String gid) {

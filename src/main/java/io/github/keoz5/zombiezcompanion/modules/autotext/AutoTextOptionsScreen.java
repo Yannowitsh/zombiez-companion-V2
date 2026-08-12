@@ -246,8 +246,12 @@ extends ModuleOptionsScreen {
     }
 
     @Override
+    //? if >= 26.1 {
     public boolean keyPressed(net.minecraft.client.input.KeyEvent event) {
         int keyCode = event.key();
+    //?} else {
+    /*public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
+    *///?}
         if (this.waitingIndex >= 0) {
             List<AutoTextConfig.Preset> presets = this.config().presets;
             if (this.waitingIndex < presets.size()) {
@@ -266,14 +270,26 @@ extends ModuleOptionsScreen {
             this.updateKeyButtons();
             return true;
         }
+        //? if >= 26.1 {
         return super.keyPressed(event);
+        //?} else {
+        /*return super.keyPressed(keyCode, scanCode, modifiers);
+        *///?}
     }
 
+    //? if >= 26.1 {
     public boolean charTyped(net.minecraft.client.input.CharacterEvent event) {
+    //?} else {
+    /*public boolean charTyped(char codePoint, int modifiers) {
+    *///?}
         if (this.waitingIndex >= 0) {
             return true;
         }
+        //? if >= 26.1 {
         return super.charTyped(event);
+        //?} else {
+        /*return super.charTyped(codePoint, modifiers);
+        *///?}
     }
 
     @Override
@@ -285,8 +301,16 @@ extends ModuleOptionsScreen {
     }
 
     @Override
+    //? if >= 26.1 {
     public void extractRenderState(GuiGraphicsExtractor ctx, int mouseX, int mouseY, float delta) {
+    //?} else {
+    /*public void render(GuiGraphicsExtractor ctx, int mouseX, int mouseY, float delta) {
+    *///?}
+        //? if >= 26.1 {
         super.extractRenderState(ctx, mouseX, mouseY, delta);
+        //?} else {
+        /*super.render(ctx, mouseX, mouseY, delta);
+        *///?}
         int x = this.panelX1 + 36;
         ctx.text(this.font, (Component)Component.translatable((String)"zombiezcompanion.autotext.header"), x, this.contentY1 + 20, -854792);
         ctx.text(this.font, (Component)Component.translatable((String)"zombiezcompanion.autotext.hint.capture"), x, this.contentY1 + 34, -8353376, false);

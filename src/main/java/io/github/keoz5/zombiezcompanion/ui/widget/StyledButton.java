@@ -24,7 +24,11 @@ extends Button {
         this.bgHover = bgHover;
     }
 
+    //? if >= 26.1 {
     protected void extractContents(GuiGraphicsExtractor ctx, int mouseX, int mouseY, float delta) {
+    //?} else {
+    /*protected void renderWidget(GuiGraphicsExtractor ctx, int mouseX, int mouseY, float delta) {
+    *///?}
         int textArgb;
         int bg;
         boolean hovered;

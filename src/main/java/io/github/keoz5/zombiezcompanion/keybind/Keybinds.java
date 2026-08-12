@@ -10,7 +10,11 @@ import net.minecraft.resources.Identifier;
 
 public final class Keybinds {
     // Key categories are now identified by an Identifier (was a translation-key String).
+    //? if >= 26.1 {
     private static final KeyMapping.Category CATEGORY = new KeyMapping.Category(Identifier.fromNamespaceAndPath("zombiezcompanion", "main"));
+    //?} else {
+    /*private static final String CATEGORY = "key.categories.zombiezcompanion.main";
+    *///?}
     private static KeyMapping openMenu;
     private static KeyMapping openMap;
     private static KeyMapping openWaypoints;
@@ -69,7 +73,11 @@ public final class Keybinds {
     }
 
     public static boolean matchesClearGuide(int keyCode, int scanCode) {
+        //? if >= 26.1 {
         return clearGuide != null && clearGuide.matches(new net.minecraft.client.input.KeyEvent(keyCode, scanCode, 0));
+        //?} else {
+        /*return clearGuide != null && clearGuide.matches(keyCode, scanCode);
+        *///?}
     }
 
     public static KeyMapping openMenu() {
