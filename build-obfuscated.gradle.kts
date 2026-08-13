@@ -2,6 +2,7 @@
 // pipeline with official Mojang mappings (Yarn is dead). Java 21.
 plugins {
     id("dev.architectury.loom") version "1.13-SNAPSHOT"
+    id("com.modrinth.minotaur") version "2.+"
     `maven-publish`
 }
 
@@ -75,5 +76,25 @@ publishing {
             artifactId = property("archives_base_name").toString()
             from(components["java"])
         }
+    }
+}
+
+// Modrinth publishing (per MC version = one Modrinth version). Lazy config: no token / no
+// `modrinth_id` set => normal builds are unaffected; only running `:<ver>-fabric:modrinth`
+// needs MODRINTH_TOKEN (env) and the project id (`-Pmodrinth_id=...` or gradle.properties).
+// Run:  MODRINTH_TOKEN=xxx ./gradlew :1.21.4-fabric:modrinth -Pmodrinth_id=<slug>
+modrinth {
+    // Token from ~/.gradle/gradle.properties (`modrinth_token=…`, outside the repo, never committed),
+    // falling back to the MODRINTH_TOKEN env var. Never hardcode it in a tracked file.
+    token.set(providers.gradleProperty("modrinth_token").orElse(providers.environmentVariable("MODRINTH_TOKEN")))
+    projectId.set(providers.gradleProperty("modrinth_id").orElse("REPLACE_ME"))
+    versionNumber.set("${project.version}+mc$minecraftVersion")
+    versionName.set("${project.version} (MC $minecraftVersion)")
+    versionType.set("release")
+    uploadFile.set(tasks.named("remapJar"))
+    gameVersions.add(minecraftVersion)
+    loaders.add("fabric")
+    dependencies {
+        required.project("fabric-api")
     }
 }

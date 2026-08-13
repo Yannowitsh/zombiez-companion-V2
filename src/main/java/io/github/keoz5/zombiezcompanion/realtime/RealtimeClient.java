@@ -4,6 +4,8 @@ import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import io.github.keoz5.zombiezcompanion.ModInfo;
 import io.github.keoz5.zombiezcompanion.log.Log;
+import io.github.keoz5.zombiezcompanion.identity.Identity;
+import io.github.keoz5.zombiezcompanion.modules.friends.FriendsModule;
 import io.github.keoz5.zombiezcompanion.modules.groups.GroupsCache;
 import io.github.keoz5.zombiezcompanion.modules.groups.GroupsModule;
 import io.github.keoz5.zombiezcompanion.modules.groups.PingCache;
@@ -34,6 +36,7 @@ public final class RealtimeClient {
     private static long backoff = RECONNECT_MIN;
     private static long lastKeepalive;
     private static String sentGroup = "";
+    private static String sentUuid = "";
 
     private RealtimeClient() {
     }
@@ -63,16 +66,25 @@ public final class RealtimeClient {
                 sentGroup = gid;
                 trySend("{\"type\":\"group\",\"group\":\"" + esc(gid) + "\"}");
             }
+            // Identity may resolve to the canonical id after we connected with the raw one; keep the
+            // socket's uuid current so targeted friend pushes reach us.
+            String uid = currentIdentity();
+            if (!uid.isEmpty() && !uid.equals(sentUuid)) {
+                sentUuid = uid;
+                trySend("{\"type\":\"identity\",\"uuid\":\"" + esc(uid) + "\"}");
+            }
         }
     }
 
     private static void connect(Minecraft client, long now) {
         lastAttempt = now;
         state = State.CONNECTING;
-        String uuid = client.player.getUUID().toString();
+        String uuid = currentIdentity();
+        if (uuid.isEmpty()) uuid = client.player.getUUID().toString();
         String name = client.player.getName().getString();
         String gid = currentGroup();
         sentGroup = gid;
+        sentUuid = uuid;
         String base = ModInfo.API_BASE.replaceFirst("^http", "ws"); // https:// -> wss://
         String url = base + "/ws?uuid=" + enc(uuid) + "&name=" + enc(name) + "&group=" + enc(gid);
         try {
@@ -103,6 +115,7 @@ public final class RealtimeClient {
         state = State.DISCONNECTED;
         backoff = RECONNECT_MIN;
         sentGroup = "";
+        sentUuid = "";
         if (s != null) {
             try { s.sendClose(WebSocket.NORMAL_CLOSURE, "bye"); } catch (Exception e) { /* ignore */ }
         }
@@ -134,6 +147,12 @@ public final class RealtimeClient {
     private static String currentGroup() {
         GroupsCache.Group g = GroupsCache.group();
         return g == null ? "" : g.id();
+    }
+
+    /** The canonical account id, or "" if not available yet (player absent / not resolved). */
+    private static String currentIdentity() {
+        String id = Identity.self();
+        return id == null ? "" : id;
     }
 
     private static void handle(String json) {
@@ -180,6 +199,12 @@ public final class RealtimeClient {
                 GroupsModule gm = GroupsModule.get();
                 if (gm != null) {
                     gm.onRealtimeAction(from, action, arg);
+                }
+            } else if ("friends".equals(type)) {
+                // A friend request/accept/decline/remove touched us — pull the fresh list instantly.
+                FriendsModule fm = FriendsModule.get();
+                if (fm != null) {
+                    fm.refresh();
                 }
             }
         } catch (Exception e) {

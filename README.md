@@ -44,6 +44,18 @@ Historique des modifications par version. Nom du jar :
 `zombiezcompanionV2-<version_minecraft>-<version_mod>`. Depuis 1.8.0, deux jars par version
 (26.1.2 et 1.21.4) ; l'updater in-mod lit le canal correspondant (branche `26.1.2` ou `master`).
 
+### 1.9.1
+- **Amis cross-version corrigés** : l'identité amis/présence est désormais alignée sur le **vrai UUID
+  Mojang** (résolu côté serveur), au lieu de l'UUID attribué par le serveur qui **diffère selon la version**.
+  Les joueurs **26.1.2 et 1.21.4 peuvent enfin s'ajouter et se voir en ligne** entre versions. Les amitiés
+  existantes sont **migrées automatiquement**.
+- **Ajout d'ami instantané** : demandes et acceptations d'amis arrivent en **temps réel** (WebSocket) au
+  lieu d'un délai pouvant atteindre ~30 s ; le polling de secours passe de 15 à 8 s.
+- **Contenu du marchand partagé** : quand un utilisateur du mod **ouvre le SUPER Marchand**, ses objets
+  vedettes s'affichent en **icônes à côté du timer marchand, pour tout le monde**, tant qu'il est en vie
+  (~5 min) — on voit d'un coup d'œil ce qu'il vend avant d'y aller. Un objet **acheté** se barre d'une
+  **croix rouge** (info perso) ; les icônes disparaissent au départ du marchand.
+
 ### 1.9.0
 - **Timer du Monarque Damné** : compte à rebours **synchronisé en ligne** vers le prochain spawn du boss
   (respawn fixe d'1 h). Détecté à sa mort dans le chat (« LE MONARQUE DAMNÉ a été terrassé »), le chrono

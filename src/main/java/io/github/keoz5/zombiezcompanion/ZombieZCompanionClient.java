@@ -154,6 +154,7 @@ implements ClientModInitializer {
         ClientTickEvents.END_CLIENT_TICK.register(moduleManager::onClientTick);
         ClientTickEvents.END_CLIENT_TICK.register(client -> UpdateChecker.tick());
         ClientTickEvents.END_CLIENT_TICK.register(RealtimeClient::tick);
+        ClientTickEvents.END_CLIENT_TICK.register(io.github.keoz5.zombiezcompanion.command.GuiDump::tick);
         //? if >= 26.1 {
         HudElementRegistry.addLast(Identifier.fromNamespaceAndPath("zombiezcompanion", "hud"), (drawContext, deltaTracker) -> moduleManager.onHudRender(drawContext, deltaTracker.getGameTimeDeltaPartialTick(true)));
         HudElementRegistry.addLast(Identifier.fromNamespaceAndPath("zombiezcompanion", "update_banner"), (drawContext, deltaTracker) -> ZombieZCompanionClient.renderUpdateBanner(drawContext));

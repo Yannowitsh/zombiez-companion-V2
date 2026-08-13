@@ -42,7 +42,10 @@ import net.minecraft.world.phys.Vec3;
 public final class FriendsModule
 implements Module {
     public static final String ID = "friends";
-    private static final long POLL_MS = 15000L;
+    // Fallback cadence only: friend request/accept/decline/remove are pushed instantly over the realtime
+    // socket ({type:"friends"} -> refresh()), so this poll just catches events missed while the socket
+    // was down or a peer's identity hadn't caught up.
+    private static final long POLL_MS = 8000L;
     /** Default marker tint; per-friend overrides live in {@link Colors} under id {@code "friend:"+uuid}. */
     public static final int FRIEND_COLOR = 0xFF33C1FF;
 
@@ -129,9 +132,9 @@ implements Module {
 
     // --- Identity -----------------------------------------------------------
 
+    /** The canonical, version-stable account id (see {@link io.github.keoz5.zombiezcompanion.identity.Identity}). */
     public static String selfMcUuid() {
-        Minecraft mc = Minecraft.getInstance();
-        return mc.player != null ? mc.player.getUUID().toString() : null;
+        return io.github.keoz5.zombiezcompanion.identity.Identity.self();
     }
 
     private static String selfName() {
@@ -171,8 +174,11 @@ implements Module {
         if (client.player == null || client.level == null || !ZombieZDetector.isOnZombieZ()) {
             return;
         }
-        // Register our pseudo -> account-uuid once per session so friends can add us by name while offline.
-        if (!this.announced) {
+        // Register our pseudo -> canonical account-uuid once per session so friends can add us by name
+        // while offline. selfMcUuid() kicks off identity resolution; wait until it settles so we announce
+        // the canonical (Mojang) id rather than the raw session one.
+        if (!this.announced && FriendsModule.selfMcUuid() != null
+                && io.github.keoz5.zombiezcompanion.identity.Identity.ready()) {
             this.announce();
             this.announced = true;
         }
@@ -187,12 +193,14 @@ implements Module {
     public void onLeaveWorld() {
         FriendsCache.clear();
         this.announced = false;
+        io.github.keoz5.zombiezcompanion.identity.Identity.reset();
     }
 
     @Override
     public void onDisable() {
         FriendsCache.clear();
         this.announced = false;
+        io.github.keoz5.zombiezcompanion.identity.Identity.reset();
     }
 
     public void refresh() {

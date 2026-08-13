@@ -67,6 +67,11 @@ public final class Commands {
             }))
             .then(ClientCommands.literal("scanmobs").executes(ctx -> Commands.scanMobs((FabricClientCommandSource)ctx.getSource())))
             .then(ClientCommands.literal("scanlook").executes(ctx -> Commands.scanLook((FabricClientCommandSource)ctx.getSource())))
+            .then(ClientCommands.literal("guidump").executes(ctx -> {
+                GuiDump.arm();
+                ((FabricClientCommandSource)ctx.getSource()).sendFeedback((Component)Component.literal((String)"§b[ZZC] guidump armé §7— ouvre le marchand, le contenu sera écrit dans §f~/zzc-guidump.txt"));
+                return 1;
+            }))
         ));
     }
 

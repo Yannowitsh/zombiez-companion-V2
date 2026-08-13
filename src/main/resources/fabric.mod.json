@@ -6,9 +6,9 @@
   "description": "Client-side, read-only QoL companion mod for the ZombieZ Minecraft server. Provides modular overlays and helpers; never automates gameplay.",
   "authors": ["yannowitsh, KEOZ5"],
   "contact": {
-    "homepage": "https://github.com/KEOZ5/zombiez-companion",
-    "sources":  "https://github.com/KEOZ5/zombiez-companion",
-    "issues":   "https://github.com/KEOZ5/zombiez-companion/issues"
+    "homepage": "https://github.com/Yannowitsh/zombiez-companion-V2",
+    "sources":  "https://github.com/Yannowitsh/zombiez-companion-V2",
+    "issues":   "https://github.com/Yannowitsh/zombiez-companion-V2/issues"
   },
   "license": "MIT",
   "icon": "assets/zombiezcompanion/icon.png",

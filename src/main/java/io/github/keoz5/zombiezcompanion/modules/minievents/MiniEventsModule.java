@@ -18,6 +18,7 @@ import io.github.keoz5.zombiezcompanion.hud.HudElements;
 import io.github.keoz5.zombiezcompanion.log.Log;
 import io.github.keoz5.zombiezcompanion.log.LogCategory;
 import io.github.keoz5.zombiezcompanion.mixin.BossBarHudAccessor;
+import io.github.keoz5.zombiezcompanion.modules.dropalert.DropClassifier;
 import io.github.keoz5.zombiezcompanion.modules.map.WaypointsModule;
 import io.github.keoz5.zombiezcompanion.modules.map.ZombieZDetector;
 import io.github.keoz5.zombiezcompanion.modules.map.ZombieZMapData;
@@ -56,6 +57,9 @@ import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.BossHealthOverlay;
 import net.minecraft.client.gui.components.LerpingBossEvent;
 import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.world.inventory.Slot;
 import net.minecraft.client.renderer.MultiBufferSource;
 //? if >= 26.1 {
 import net.minecraft.client.renderer.rendertype.RenderType;
@@ -108,6 +112,8 @@ implements Module {
     private long marchandHeaderUntil;
     private String marchandWaypointId;
     private long marchandExpiresAt;
+    // Throttle for capturing/sharing the merchant's featured items when the shop GUI is open.
+    private long lastMarchandCaptureMs;
     private long assautHeaderUntil;
     private String assautWaypointId;
     private long bossHeaderUntil;
@@ -268,6 +274,8 @@ implements Module {
             this.reset();
             return;
         }
+        // Share the merchant's featured items whenever the shop GUI is open (throttled).
+        this.tryCaptureMarchandOffer(client);
         if (this.config().worldBoss) {
             this.scanWorldBossBossbar(client);
         }
@@ -279,6 +287,9 @@ implements Module {
         if ((this.config().marchandTimer || this.config().worldBossTimer || this.config().monarchTimer) && nowMs >= this.nextSpawnFetchMs) {
             if (this.config().marchandTimer || this.config().worldBossTimer) {
                 this.fetchSpawns();
+            }
+            if (this.config().marchandTimer) {
+                this.fetchMarchandOffer();
             }
             if (this.config().monarchTimer) {
                 this.fetchMonarch();
@@ -399,6 +410,15 @@ implements Module {
     private void handleMarchandLine(String ascii) {
         Matcher m;
         long now = System.currentTimeMillis();
+        // Purchase confirmation ("[Marchand] Achat reussi : <item>") -> cross that featured icon locally.
+        int ar = ascii.indexOf("achat reussi");
+        if (ar >= 0) {
+            int colon = ascii.indexOf(':', ar);
+            if (colon >= 0) {
+                MarchandOfferCache.markSold(ascii.substring(colon + 1));
+            }
+            return;
+        }
         // (d) End of life: the new departure line is "[Marchand] Le marchand ambulant est reparti.";
         //     broaden the detector to also match "est reparti" alongside the legacy phrases.
         if (ascii.contains("stock epuise") || ascii.contains("reparti en quete") || ascii.contains("est reparti")) {
@@ -407,6 +427,7 @@ implements Module {
             }
             this.marchandHeaderUntil = 0L;
             this.marchandZone = -1;
+            MarchandOfferCache.clear(); // merchant left — its offer is no longer relevant
             Log.debug(LogCategory.CHAT, "marchand: departure detected");
             return;
         }
@@ -603,6 +624,95 @@ implements Module {
         this.getAsync(ModInfo.API_BASE + "/spawns").thenAccept(SpawnSync::update);
     }
 
+    // --- Marchand offer (shared featured items) ---------------------------------
+
+    private void fetchMarchandOffer() {
+        this.getAsync(ModInfo.API_BASE + "/marchand/offer").thenAccept(MarchandOfferCache::update);
+    }
+
+    /**
+     * When the SUPER Marchand shop GUI is open, capture its featured items (the non-filler entries in the
+     * top two rows) and share them so everyone sees what's for sale on the timer. Throttled to once every
+     * 10s so reopening the shop doesn't spam. The stock is global for a spawn, so a single share serves all.
+     */
+    private void tryCaptureMarchandOffer(Minecraft client) {
+        if (!this.config().marchand || !(client.screen instanceof AbstractContainerScreen<?> cs)) {
+            return;
+        }
+        String title = cs.getTitle() == null ? "" : MiniEventsModule.stripDiacritics(cs.getTitle().getString()).toLowerCase(Locale.ROOT);
+        if (!title.contains("marchand")) {
+            return;
+        }
+        List<Slot> slots = cs.getMenu().slots;
+        ArrayList<MarchandOfferCache.OfferItem> items = new ArrayList<MarchandOfferCache.OfferItem>();
+        int limit = Math.min(18, slots.size()); // top two rows of the chest = the featured highlights
+        for (int i = 0; i < limit && items.size() < 4; ++i) {
+            ItemStack st = slots.get(i).getItem();
+            if (st.isEmpty() || MiniEventsModule.isOfferFiller(st)) {
+                continue;
+            }
+            String id = BuiltInRegistries.ITEM.getKey(st.getItem()).toString();
+            items.add(new MarchandOfferCache.OfferItem(id, st.getHoverName().getString(), DropClassifier.rarityOf(st).name(), st.getCount()));
+        }
+        if (items.isEmpty()) {
+            return;
+        }
+        // Share the featured items, throttled, so reopening the shop doesn't spam the backend.
+        long now = System.currentTimeMillis();
+        if (now - this.lastMarchandCaptureMs < 10000L) {
+            return;
+        }
+        // The merchant lives ~5 min from spawn; use the parsed "5:00" expiry when known so viewers hide
+        // the icons exactly when it leaves.
+        long exp = this.marchandExpiresAt > now ? this.marchandExpiresAt : now + 300000L;
+        this.lastMarchandCaptureMs = now;
+        MarchandOfferCache.ingest(now, exp, this.marchandZone, items); // reflect it locally right away (union)
+        // Post the accumulated union (not just this capture) so a depleted reopen can't shrink the shared
+        // offer even if the backend's read-modify-write merge sees a stale KV value.
+        this.postMarchandOffer(MarchandOfferCache.items(), this.marchandZone, now, exp);
+    }
+
+    /** Decorative slots (glass-pane spacers, "no item" barriers) that are not real offers. */
+    private static boolean isOfferFiller(ItemStack st) {
+        String id = BuiltInRegistries.ITEM.getKey(st.getItem()).toString();
+        return id.equals("minecraft:barrier") || id.endsWith("_stained_glass_pane") || id.equals("minecraft:glass_pane");
+    }
+
+    private void postMarchandOffer(List<MarchandOfferCache.OfferItem> items, int zone, long now, long expiresAt) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("{\"at\":").append(now).append(",\"expiresAt\":").append(expiresAt).append(",\"zone\":").append(Math.max(0, zone)).append(",\"items\":[");
+        for (int i = 0; i < items.size(); ++i) {
+            MarchandOfferCache.OfferItem it = items.get(i);
+            if (i > 0) {
+                sb.append(',');
+            }
+            sb.append("{\"id\":\"").append(MiniEventsModule.jsonEsc(it.id()))
+              .append("\",\"name\":\"").append(MiniEventsModule.jsonEsc(it.name()))
+              .append("\",\"rarity\":\"").append(MiniEventsModule.jsonEsc(it.rarity()))
+              .append("\",\"count\":").append(it.count()).append('}');
+        }
+        sb.append("]}");
+        try {
+            HttpRequest req = HttpRequest.newBuilder().uri(URI.create(ModInfo.API_BASE + "/marchand/offer")).timeout(Duration.ofSeconds(5L)).header("Content-Type", "application/json").POST(HttpRequest.BodyPublishers.ofString(sb.toString())).build();
+            HttpClients.SHARED.sendAsync(req, HttpResponse.BodyHandlers.discarding()).exceptionally(t -> null);
+        } catch (Exception ignored) {
+            // best-effort share
+        }
+    }
+
+    private static String jsonEsc(String s) {
+        return s == null ? "" : s.replace("\\", "\\\\").replace("\"", "\\\"");
+    }
+
+    /** Red "X" over a 16x16 icon marking a bought/unavailable merchant item. */
+    private static void drawSoldCross(GuiGraphicsExtractor ctx, int ox, int oy) {
+        int red = 0xFFFF3030;
+        for (int i = 0; i < 16; ++i) {
+            ctx.fill(ox + i, oy + i, ox + i + 2, oy + i + 2, red);
+            ctx.fill(ox + i, oy + 15 - i, ox + i + 2, oy + 17 - i, red);
+        }
+    }
+
     // --- Le Monarque Damné (fixed 1h respawn, shared across players via the backend) ---
 
     /** Sets the next-spawn time locally (re-arming the <1min alert) and optionally shares it with the backend. */
@@ -692,7 +802,13 @@ implements Module {
         String intervalStr = MiniEventsModule.intervalRange(spawns);
         MutableComponent line = Component.translatable((String)labelKey, (Object[])new Object[]{elapsedStr, intervalStr});
         Font tr = client.font;
-        int baseW = tr.width((FormattedText)line) + 12;
+        // Marchand only: append the shared featured items as icons after the text, but only while the
+        // merchant is alive (it lasts ~5 min, then the offer is meaningless and the icons disappear).
+        boolean marchandLive = !boss && MarchandOfferCache.expiresAt() > now;
+        List<MarchandOfferCache.OfferItem> offer = marchandLive ? MarchandOfferCache.items() : List.of();
+        int textW = tr.width((FormattedText)line);
+        int iconArea = offer.isEmpty() ? 0 : offer.size() * 18 + 4;
+        int baseW = textW + 12 + iconArea;
         int baseH = 16;
         int screenW = ctx.guiWidth();
         int screenH = ctx.guiHeight();
@@ -712,6 +828,17 @@ implements Module {
         ctx.fill(0, 0, baseW, baseH, -1442840576);
         ctx.fill(0, 0, baseW, 1, accent);
         ctx.text(tr, (Component)line, 6, 4, -1);
+        if (!offer.isEmpty()) {
+            int ix = textW + 12;
+            for (MarchandOfferCache.OfferItem it : offer) {
+                ctx.item(MarchandOfferCache.stackOf(it), ix, 0);
+                if (MarchandOfferCache.isSold(it)) {
+                    ctx.fill(ix, 0, ix + 16, 16, 0xB0202020); // grey out + red cross = bought / unavailable
+                    MiniEventsModule.drawSoldCross(ctx, ix, 0);
+                }
+                ix += 18;
+            }
+        }
         ctx.pose().popMatrix();
     }
 
@@ -1495,7 +1622,9 @@ implements Module {
         this.bossHeaderUntil = 0L;
         this.failleBossbarSeenAtMs = 0L;
         this.nextSpawnFetchMs = 0L;
+        this.lastMarchandCaptureMs = 0L;
         SpawnSync.clear();
+        MarchandOfferCache.clear();
     }
 
     public static enum MiniEventType {

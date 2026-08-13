@@ -2,6 +2,7 @@
 // official names, so use the non-remap Loom variant (no mappings). Java 25.
 plugins {
     id("net.fabricmc.fabric-loom") version "1.17.19"
+    id("com.modrinth.minotaur") version "2.+"
     `maven-publish`
 }
 
@@ -76,5 +77,26 @@ publishing {
             artifactId = property("archives_base_name").toString()
             from(components["java"])
         }
+    }
+}
+
+// Modrinth publishing (per MC version = one Modrinth version). Lazy config: no token / no
+// `modrinth_id` set => normal builds are unaffected; only running `:<ver>-fabric:modrinth`
+// needs MODRINTH_TOKEN (env) and the project id (`-Pmodrinth_id=...` or gradle.properties).
+// Run:  MODRINTH_TOKEN=xxx ./gradlew :26.1.2-fabric:modrinth -Pmodrinth_id=<slug>
+modrinth {
+    // Token from ~/.gradle/gradle.properties (`modrinth_token=…`, outside the repo, never committed),
+    // falling back to the MODRINTH_TOKEN env var. Never hardcode it in a tracked file.
+    token.set(providers.gradleProperty("modrinth_token").orElse(providers.environmentVariable("MODRINTH_TOKEN")))
+    projectId.set(providers.gradleProperty("modrinth_id").orElse("REPLACE_ME"))
+    versionNumber.set("${project.version}+mc$minecraftVersion")
+    versionName.set("${project.version} (MC $minecraftVersion)")
+    versionType.set("release")
+    // Non-remap Loom (26.1+, official names) has no `remapJar`; `jar` is the final mod jar.
+    uploadFile.set(tasks.named("jar"))
+    gameVersions.add(minecraftVersion)
+    loaders.add("fabric")
+    dependencies {
+        required.project("fabric-api")
     }
 }

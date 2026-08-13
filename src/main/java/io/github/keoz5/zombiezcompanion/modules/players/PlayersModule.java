@@ -247,7 +247,10 @@ implements Module {
             return;
         }
         String dim = client.level != null ? client.level.dimension().identifier().toString() : "";
-        String mcuuid = client.player.getUUID().toString();
+        // Canonical (version-stable) id so cross-version friends match this presence; falls back to the
+        // raw session UUID until it resolves.
+        String mcuuid = io.github.keoz5.zombiezcompanion.identity.Identity.self();
+        if (mcuuid == null) mcuuid = client.player.getUUID().toString();
         String body = String.format(Locale.ROOT, "{\"uuid\":\"%s\",\"name\":\"%s\",\"server\":\"%s\",\"x\":%.1f,\"y\":%.1f,\"z\":%.1f,\"dim\":\"%s\",\"mcuuid\":\"%s\",\"modVersion\":\"%s\"}", PlayersModule.escape(this.selfUuid()), PlayersModule.escape(client.player.getName().getString()), SERVER_KEY, client.player.getX(), client.player.getY(), client.player.getZ(), PlayersModule.escape(dim), PlayersModule.escape(mcuuid), PlayersModule.escape(PlayersModule.modVersion()));
         this.postAsync(ModInfo.API_BASE + "/presence", body);
         this.presenceActive = true;

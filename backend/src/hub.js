@@ -41,6 +41,12 @@ export class Hub extends DurableObject {
       const a = ws.deserializeAttachment() || {};
       a.group = String(msg.group || "").slice(0, 64);
       ws.serializeAttachment(a);
+    } else if (msg.type === "identity") {
+      // The client resolved its canonical (version-stable) account id after connecting; keep the
+      // socket's uuid current so targeted friend pushes (notify) reach it.
+      const a = ws.deserializeAttachment() || {};
+      a.uuid = String(msg.uuid || "").slice(0, 64);
+      ws.serializeAttachment(a);
     } else if (msg.type === "ping") {
       this.relayPing(ws, msg);
     } else if (msg.type === "action") {
@@ -66,6 +72,22 @@ export class Hub extends DurableObject {
     let n = 0;
     for (const ws of this.ctx.getWebSockets()) {
       try { ws.send(payload); n++; } catch {}
+    }
+    return n;
+  }
+
+  // Nudge specific connected accounts to re-pull their friends list (instant friend request/accept).
+  // Matches on the per-connection uuid attachment. Returns how many sockets were notified.
+  notify(uuids) {
+    const set = new Set((uuids || []).map((u) => String(u)));
+    if (!set.size) return 0;
+    const payload = JSON.stringify({ type: "friends" });
+    let n = 0;
+    for (const ws of this.ctx.getWebSockets()) {
+      const a = ws.deserializeAttachment() || {};
+      if (a.uuid && set.has(a.uuid)) {
+        try { ws.send(payload); n++; } catch {}
+      }
     }
     return n;
   }

@@ -55,6 +55,7 @@ export default {
       if (path === "/friends/accept" && method === "POST") return postFriendAccept(request, env);
       if (path === "/friends/decline" && method === "POST") return postFriendDecline(request, env);
       if (path === "/friends/remove" && method === "POST") return postFriendRemove(request, env);
+      if (path === "/identity" && method === "GET") return getIdentity(url, env);
       if (path === "/group" && method === "GET") return getGroup(url, env);
       if (path === "/group/create" && method === "POST") return groupCreate(request, env);
       if (path === "/group/invite" && method === "POST") return groupInvite(request, env);
@@ -69,6 +70,8 @@ export default {
       if (path === "/group/action" && method === "POST") return groupActionPost(request, env);
       if (path === "/monarch" && method === "GET") return getMonarch(env);
       if (path === "/monarch" && method === "POST") return postMonarch(request, env);
+      if (path === "/marchand/offer" && method === "GET") return getMarchandOffer(env);
+      if (path === "/marchand/offer" && method === "POST") return postMarchandOffer(request, env);
       if (path === "/leaderboard" && method === "POST") return postLeaderboard(request, env);
       if (path === "/leaderboard" && method === "GET") return getLeaderboard(env);
       if (path === "/feedback" && method === "POST") return handleFeedback(request, env);
@@ -418,6 +421,17 @@ function without(arr, uuid) {
   return arr.filter((e) => e && e.uuid !== uuid);
 }
 
+// Instant push: nudge the given account UUIDs (if connected) to re-pull their friends list, so a
+// request/accept/decline/remove shows up in ~1s instead of on the next 8s poll. Best-effort: the poll
+// is the fallback when a target is offline or the socket's identity hasn't caught up yet.
+async function notifyFriends(env, uuids) {
+  try {
+    const list = [...new Set((uuids || []).filter(Boolean).map(String))];
+    if (!list.length || !env.HUB) return;
+    await env.HUB.getByName("global").notify(list);
+  } catch { /* hub unreachable — poll fallback covers it */ }
+}
+
 // Name directory (pseudo -> mcuuid), so a friend request can target a player by username even when
 // they are offline / not in the presence roster. Written once per play session (see /friends/announce),
 // long TTL, so it stays cheap on the free KV tier. Latest writer wins on a name.
@@ -488,6 +502,7 @@ async function postFriendRequest(request, env) {
     out.unshift({ uuid: b.to, name: toName, at: Date.now() });
     await putArr(env, `fout:${b.from}`, out);
   }
+  await notifyFriends(env, [b.to]);
   return json({ ok: true }, 200);
 }
 
@@ -509,6 +524,7 @@ async function acceptFriendship(env, uuid, accepterName, from) {
     putArr(env, `freq:${uuid}`, without(inc, from)),
     getArr(env, `fout:${from}`).then((o) => putArr(env, `fout:${from}`, without(o, uuid))),
   ]);
+  await notifyFriends(env, [uuid, from]);
   return json({ ok: true }, 200);
 }
 
@@ -529,6 +545,7 @@ async function postFriendDecline(request, env) {
     putArr(env, `freq:${b.uuid}`, without(inc, b.from)),
     putArr(env, `fout:${b.from}`, without(out, b.uuid)),
   ]);
+  await notifyFriends(env, [b.from]);
   return json({ ok: true }, 200);
 }
 
@@ -543,7 +560,138 @@ async function postFriendRemove(request, env) {
     putArr(env, `friend:${b.uuid}`, without(a, b.friend)),
     putArr(env, `friend:${b.friend}`, without(c, b.uuid)),
   ]);
+  await notifyFriends(env, [b.friend]);
   return json({ ok: true }, 200);
+}
+
+// --- Canonical identity (version-stable) ---------------------------------
+// Rinaorc hands out different account UUIDs per client-version route: the native route gets the real
+// Mojang UUID, the proxied one an offline (name-derived) UUID. So mc.player.getUUID() is NOT stable
+// across versions, which fragments the friend graph and presence matching. We resolve the canonical
+// Mojang UUID by username (Mojang API, KV-cached) and the mod uses it as its single identity. When a
+// client first resolves, it passes its previous (session) UUID as `prev`; if that differs we migrate
+// its friend edges onto the canonical id (one-time, guarded), so existing friendships survive.
+const MOJANG_TTL = 60 * 60 * 24 * 7; // 7 days
+
+function dashUuid(hex) {
+  const h = String(hex || "").replace(/-/g, "").toLowerCase();
+  if (h.length !== 32 || /[^0-9a-f]/.test(h)) return null;
+  return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}`;
+}
+
+async function canonicalUuid(env, name) {
+  const key = `mojang:${String(name).toLowerCase()}`;
+  const cached = await env.ZZC.get(key);
+  if (cached) return cached;
+  const uuid = await fetchMojangUuid(name);
+  if (uuid) await env.ZZC.put(key, uuid, { expirationTtl: MOJANG_TTL });
+  return uuid;
+}
+
+// Resolve a username to a dashed Mojang UUID, or null. Tries the official Mojang API first, then a
+// mirror (Cloudflare datacenter IPs are sometimes rate-limited/blocked by Mojang). Returns {uuid,status}
+// via the last arg for diagnostics.
+async function fetchMojangUuid(name, diag) {
+  const ua = { "user-agent": "ZombiezCompanion/1.0 (+https://github.com/Yannowitsh/zombiez-companion-V2)" };
+  // 1) Official Mojang API.
+  try {
+    const r = await fetch(`https://api.mojang.com/users/profiles/minecraft/${encodeURIComponent(name)}`, { headers: ua });
+    if (diag) diag.mojang = r.status;
+    if (r.status === 200) {
+      const o = await r.json();
+      const uuid = o && o.id ? dashUuid(o.id) : null;
+      if (uuid) return uuid;
+    } else if (r.status === 404) {
+      return null; // definitively non-premium — don't bother the mirror
+    }
+  } catch (e) { if (diag) diag.mojangErr = String(e); }
+  // 2) Mirror (Ashcon aggregates Mojang; tolerant of datacenter IPs).
+  try {
+    const r = await fetch(`https://api.ashcon.app/mojang/v2/user/${encodeURIComponent(name)}`, { headers: ua });
+    if (diag) diag.mirror = r.status;
+    if (r.status === 200) {
+      const o = await r.json();
+      const uuid = o && o.uuid ? dashUuid(o.uuid) : null;
+      if (uuid) return uuid;
+    }
+  } catch (e) { if (diag) diag.mirrorErr = String(e); }
+  return null;
+}
+
+async function getIdentity(url, env) {
+  const name = url.searchParams.get("name");
+  if (!name) return json({ error: "bad_request" }, 400);
+  const uuid = await canonicalUuid(env, name);
+  if (!uuid) return json({ error: "not_found" }, 404); // non-premium / unknown: client keeps its session UUID
+  const prev = url.searchParams.get("prev");
+  if (prev && prev !== uuid) await migrateEdges(env, prev, uuid);
+  // Keep the directory canonical too, so "add by name" always targets the Mojang uuid.
+  await env.ZZC.put(`name:${String(name).toLowerCase()}`, JSON.stringify({ uuid, name }), { expirationTtl: NAME_TTL });
+  return json({ uuid, name });
+}
+
+// One-time re-key of a player's friend edges from an old id (e.g. an offline-route UUID) onto their
+// canonical Mojang id: rewrites the counterpart lists so both sides point at the canonical id, then
+// merges the old lists into the canonical keys. Guarded by mig:<oldId> so it runs at most once.
+async function migrateEdges(env, oldId, newId) {
+  if (!oldId || oldId === newId) return;
+  if (await env.ZZC.get(`mig:${oldId}`)) return;
+  await env.ZZC.put(`mig:${oldId}`, "1");
+
+  // Accepted friends: point each friend's entry for us at the canonical id.
+  const friends = await getArr(env, `friend:${oldId}`);
+  for (const f of friends) {
+    if (!f || !f.uuid) continue;
+    const cp = await getArr(env, `friend:${f.uuid}`);
+    if (cp.some((e) => e && e.uuid === oldId)) {
+      await putArr(env, `friend:${f.uuid}`, dedupeByUuid(cp.map((e) => (e && e.uuid === oldId ? { ...e, uuid: newId } : e))));
+    }
+  }
+  await mergeKey(env, `friend:${oldId}`, `friend:${newId}`);
+
+  // Incoming pending (others -> us): fix each sender's outgoing entry.
+  const inc = await getArr(env, `freq:${oldId}`);
+  for (const r of inc) {
+    if (!r || !r.uuid) continue;
+    const o = await getArr(env, `fout:${r.uuid}`);
+    if (o.some((e) => e && e.uuid === oldId)) {
+      await putArr(env, `fout:${r.uuid}`, dedupeByUuid(o.map((e) => (e && e.uuid === oldId ? { ...e, uuid: newId } : e))));
+    }
+  }
+  await mergeKey(env, `freq:${oldId}`, `freq:${newId}`);
+
+  // Outgoing pending (us -> others): fix each recipient's incoming entry.
+  const out = await getArr(env, `fout:${oldId}`);
+  for (const r of out) {
+    if (!r || !r.uuid) continue;
+    const i2 = await getArr(env, `freq:${r.uuid}`);
+    if (i2.some((e) => e && e.uuid === oldId)) {
+      await putArr(env, `freq:${r.uuid}`, dedupeByUuid(i2.map((e) => (e && e.uuid === oldId ? { ...e, uuid: newId } : e))));
+    }
+  }
+  await mergeKey(env, `fout:${oldId}`, `fout:${newId}`);
+}
+
+async function mergeKey(env, fromKey, toKey) {
+  const from = await getArr(env, fromKey);
+  const to = await getArr(env, toKey);
+  const seen = new Set(to.map((e) => e && e.uuid).filter(Boolean));
+  for (const e of from) {
+    if (e && e.uuid && !seen.has(e.uuid)) { to.unshift(e); seen.add(e.uuid); }
+  }
+  await putArr(env, toKey, to);
+  await env.ZZC.delete(fromKey);
+}
+
+function dedupeByUuid(arr) {
+  const seen = new Set();
+  const out = [];
+  for (const e of arr) {
+    if (!e || !e.uuid || seen.has(e.uuid)) continue;
+    seen.add(e.uuid);
+    out.push(e);
+  }
+  return out;
 }
 
 // --- Groups --------------------------------------------------------------
@@ -760,5 +908,50 @@ async function postMonarch(request, env) {
   const b = await readJson(request);
   if (!b || typeof b.nextSpawn !== "number") return json({ error: "bad_request" }, 400);
   await env.ZZC.put("monarch:next", String(Math.floor(b.nextSpawn)), { expirationTtl: MONARCH_TTL });
+  return noContent();
+}
+
+// --- Marchand offer (shared "what's for sale") -------------------------------
+// The SUPER Marchand's stock is the same for everyone during a spawn ("stock personnel pour chacun" =
+// per-player purchase limits, not per-player items), so one player who opens it can share the featured
+// items for the rest to glance at on the timer. A single latest-wins entry, TTL a bit over the merchant's
+// 5-minute life so it clears on its own.
+const MARCHAND_OFFER_TTL = 360; // 6 minutes
+
+async function getMarchandOffer(env) {
+  const v = await env.ZZC.get("marchand:offer");
+  return json(v ? JSON.parse(v) : { at: 0, zone: 0, items: [] });
+}
+
+async function postMarchandOffer(request, env) {
+  const b = await readJson(request);
+  if (!b || !Array.isArray(b.items)) return json({ error: "bad_request" }, 400);
+  const items = b.items.slice(0, 12).map((it) => ({
+    id: String((it && it.id) || "").slice(0, 64),
+    name: String((it && it.name) || "").slice(0, 64),
+    rarity: String((it && it.rarity) || "").slice(0, 16),
+    count: Math.max(1, Math.min(9999, Number(it && it.count) || 1)),
+  })).filter((it) => it.id);
+  if (!items.length) return json({ error: "bad_request" }, 400);
+  const now = Date.now();
+  let expiresAt = Number(b.expiresAt) || (now + 300000);
+  // Merge into the current merchant's offer instead of overwriting: buying is personal, so a scout who
+  // reopens a partly-depleted shop must never shrink the shared "what's for sale". Union by id; only a
+  // fresh merchant (previous offer expired) starts over.
+  let existing = null;
+  try { const raw = await env.ZZC.get("marchand:offer"); existing = raw ? JSON.parse(raw) : null; } catch {}
+  let entry;
+  if (existing && Number(existing.expiresAt) > now && Array.isArray(existing.items)) {
+    const have = new Set(existing.items.map((it) => it && it.id).filter(Boolean));
+    const merged = existing.items.slice();
+    for (const it of items) if (!have.has(it.id)) { merged.push(it); have.add(it.id); }
+    expiresAt = Math.max(Number(existing.expiresAt), expiresAt);
+    entry = { at: Number(existing.at) || now, expiresAt, zone: Number(existing.zone) || Number(b.zone) || 0, items: merged.slice(0, 12) };
+  } else {
+    entry = { at: Number(b.at) || now, expiresAt, zone: Number(b.zone) || 0, items };
+  }
+  // Expire the KV entry a minute after the merchant leaves so a stale offer never lingers (min 60s).
+  const ttl = Math.max(60, Math.min(MARCHAND_OFFER_TTL, Math.round((expiresAt - now) / 1000) + 60));
+  await env.ZZC.put("marchand:offer", JSON.stringify(entry), { expirationTtl: ttl });
   return noContent();
 }
