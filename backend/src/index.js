@@ -67,6 +67,8 @@ export default {
       if (path === "/group/ping" && method === "POST") return groupPing(request, env);
       if (path === "/group/ping/clear" && method === "POST") return groupPingClear(request, env);
       if (path === "/group/action" && method === "POST") return groupActionPost(request, env);
+      if (path === "/monarch" && method === "GET") return getMonarch(env);
+      if (path === "/monarch" && method === "POST") return postMonarch(request, env);
       if (path === "/leaderboard" && method === "POST") return postLeaderboard(request, env);
       if (path === "/leaderboard" && method === "GET") return getLeaderboard(env);
       if (path === "/feedback" && method === "POST") return handleFeedback(request, env);
@@ -696,7 +698,8 @@ async function groupPing(request, env) {
   // Only meaningful while in a group, but store regardless; retrieval is group-scoped.
   const entry = {
     uuid: b.uuid, name: b.name || "?",
-    x: b.x || 0, y: b.y || 0, z: b.z || 0, dim: b.dim || "", at: Date.now(),
+    x: b.x || 0, y: b.y || 0, z: b.z || 0, dim: b.dim || "",
+    cat: String(b.cat || "").slice(0, 16), at: Date.now(),
   };
   await env.ZZC.put(`gping:${b.uuid}`, JSON.stringify(entry), { expirationTtl: GPING_TTL });
   return noContent();
@@ -741,4 +744,21 @@ async function groupActionPost(request, env) {
   const action = { id: crypto.randomUUID(), type: String(b.type), arg: b.arg == null ? "" : String(b.arg), by: b.uuid, at: Date.now() };
   await env.ZZC.put(`gaction:${g.id}`, JSON.stringify(action), { expirationTtl: GACTION_TTL });
   return json({ ok: true }, 200);
+}
+
+// --- Le Monarque Damné (fixed 1h respawn) ------------------------------------
+// A single shared "next spawn" timestamp so a player joining mid-cycle sees the countdown. Anyone who
+// witnesses the death POSTs it; the value self-expires a bit after the hour so a stale timer clears.
+const MONARCH_TTL = 70 * 60; // 70 minutes
+
+async function getMonarch(env) {
+  const v = await env.ZZC.get("monarch:next");
+  return json({ nextSpawn: v ? Number(v) || 0 : 0 });
+}
+
+async function postMonarch(request, env) {
+  const b = await readJson(request);
+  if (!b || typeof b.nextSpawn !== "number") return json({ error: "bad_request" }, 400);
+  await env.ZZC.put("monarch:next", String(Math.floor(b.nextSpawn)), { expirationTtl: MONARCH_TTL });
+  return noContent();
 }

@@ -10,6 +10,7 @@ import io.github.keoz5.zombiezcompanion.core.ModuleContext;
 import io.github.keoz5.zombiezcompanion.core.ModuleManager;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
+import io.github.keoz5.zombiezcompanion.keybind.Keybinds;
 import io.github.keoz5.zombiezcompanion.log.Log;
 import io.github.keoz5.zombiezcompanion.log.LogCategory;
 import io.github.keoz5.zombiezcompanion.modules.friends.FriendsModule;
@@ -55,13 +56,44 @@ implements Module {
     private static final long PING_POLL_MS = 6000L;
     /** Two ping-key presses within this window remove the ping instead of placing one. */
     private static final long PING_DOUBLE_MS = 500L;
+    /** Hold the ping key at least this long (ms) to open the ping wheel instead of a quick tap. */
+    private static final long PING_WHEEL_HOLD_MS = 180L;
     /** Max raycast distance (blocks) for "ping where I'm looking". */
     private static final double PING_REACH = 160.0;
     /** Member marker tint (greenish); the chief is drawn in {@link #CHIEF_COLOR}. */
     public static final int GROUP_COLOR = 0xFF33FF9E;
     public static final int CHIEF_COLOR = 0xFFFFC83D;
-    /** Shared-ping marker tint (magenta). */
+    /** Shared-ping marker tint (magenta) for a generic ping (no category). */
     public static final int PING_COLOR = 0xFFFF3DAE;
+    /** Ping-wheel categories in wheel order: up / down / left / right. */
+    public static final String[] PING_CATS = {"danger", "loot", "help", "enemy"};
+
+    /** Marker tint for a ping category (generic magenta when uncategorized). */
+    public static int pingColor(String cat) {
+        if (cat == null) {
+            return PING_COLOR;
+        }
+        switch (cat) {
+            case "danger": return 0xFFFF4040;
+            case "loot":   return 0xFFFFC83D;
+            case "help":   return 0xFF3DFF7A;
+            case "enemy":  return 0xFFB84DFF;
+            default:       return PING_COLOR;
+        }
+    }
+
+    /** Localized short label for a ping category, or "" for a generic ping. */
+    public static String pingCatLabel(String cat) {
+        if (cat == null || cat.isEmpty()) {
+            return "";
+        }
+        for (String c : PING_CATS) {
+            if (c.equals(cat)) {
+                return Component.translatable((String)("zombiezcompanion.groups.ping.cat." + cat)).getString();
+            }
+        }
+        return "";
+    }
     /** Delay (ms) before an auto group-dungeon join fires. The chief already validates the launch, so we
      * join immediately (0); the tick loop still lets a sneaking player cancel before the next tick. */
     private static final long DUNGEON_COUNTDOWN_MS = 0L;
@@ -94,10 +126,17 @@ implements Module {
     private boolean havePos;
     private String lastRefugeArg = "";
     private long lastRefugeBroadcastMs;
+    // Follower side: last applied action (type:arg) + time, to dedup across the WS push and the poll fallback.
+    private String lastAppliedActionKey = "";
+    private long lastAppliedActionMs;
     // Set when the chief opens /refuge; a teleport before this deadline is treated as a refuge selection.
     private long refugeArmedUntil;
     // Invite feedback: uuid -> time the local player invited them, so the UI shows "Invitation envoyée".
     private final Map<String, Long> invitedAt = new HashMap<String, Long>();
+    // Ping-wheel input state (polled from GLFW): tap = generic ping, hold = wheel, release = place category.
+    private boolean pingWasHeld;
+    private long pingPressStart;
+    private boolean pingWheelOpen;
 
     @Override
     public String id() {
@@ -180,7 +219,8 @@ implements Module {
         }
         this.lastRefugeArg = arg;
         this.lastRefugeBroadcastMs = now;
-        this.postAction("refuge", arg);
+        this.postAction("refuge", arg);          // persisted fallback (offline members, out-of-date clients)
+        RealtimeClient.sendAction("refuge", arg); // instant push to connected members
     }
 
     @Override
@@ -250,6 +290,7 @@ implements Module {
         this.lastZ = pz;
         this.havePos = true;
         long now = System.currentTimeMillis();
+        this.tickPingInput(client, now);
         if (now >= this.nextPollMs) {
             this.refresh();
             this.nextPollMs = now + POLL_MS;
@@ -320,7 +361,7 @@ implements Module {
         });
     }
 
-    /** Parse the chief's latest broadcast action from the poll and replay it (follow-chief). */
+    /** Parse the chief's latest broadcast action from the poll and replay it (follow-chief fallback). */
     private void handleAction(String resp) {
         try {
             JsonObject obj = JsonParser.parseString((String)resp).getAsJsonObject();
@@ -332,30 +373,54 @@ implements Module {
             if (id.isEmpty() || id.equals(this.lastActionId)) {
                 return;
             }
-            // Mark seen up-front so an action is applied at most once, even if conditions fail.
+            // Mark seen up-front so a given poll action is processed at most once.
             this.lastActionId = id;
             String by = a.has("by") ? a.get("by").getAsString() : "";
             String type = a.has("type") ? a.get("type").getAsString() : "";
             String arg = a.has("arg") ? a.get("arg").getAsString() : "";
-            String self = FriendsModule.selfMcUuid();
-            GroupsCache.Group g = GroupsCache.group();
-            if (!this.config().followChief || g == null || self == null) {
-                return;
-            }
-            if (self.equals(by) || !by.equals(g.chief())) {
-                return; // only replay the chief's own actions, and never our own
-            }
-            if ("refuge".equals(type) && !arg.isEmpty()) {
-                Minecraft mc = Minecraft.getInstance();
-                mc.execute(() -> {
-                    if (mc.getConnection() != null) {
-                        mc.getConnection().sendCommand("refuge tp " + arg);
-                    }
-                });
-            }
+            this.applyChiefAction(by, type, arg);
         }
         catch (Exception exception) {
             // ignore malformed action
+        }
+    }
+
+    /** WebSocket entry point: the chief's follow-action pushed instantly by the Hub (primary path). */
+    public void onRealtimeAction(String by, String type, String arg) {
+        this.applyChiefAction(by, type, arg);
+    }
+
+    /**
+     * Applies the chief's broadcast follow-action, from either the instant WebSocket push or the 6s poll
+     * fallback. Deduped by content (type+arg) so the same destination isn't replayed twice across the two
+     * channels; only the chief's own actions are followed, never our own.
+     */
+    private void applyChiefAction(String by, String type, String arg) {
+        if (by == null || type == null || arg == null || arg.isEmpty()) {
+            return;
+        }
+        String self = FriendsModule.selfMcUuid();
+        GroupsCache.Group g = GroupsCache.group();
+        if (!this.config().followChief || g == null || self == null) {
+            return;
+        }
+        if (self.equals(by) || !by.equals(g.chief())) {
+            return; // only the chief's actions, and never our own
+        }
+        long now = System.currentTimeMillis();
+        String key = type + ":" + arg;
+        if (key.equals(this.lastAppliedActionKey) && now - this.lastAppliedActionMs < 8000L) {
+            return; // already applied this destination (via WS or a previous poll) very recently
+        }
+        this.lastAppliedActionKey = key;
+        this.lastAppliedActionMs = now;
+        if ("refuge".equals(type)) {
+            Minecraft mc = Minecraft.getInstance();
+            mc.execute(() -> {
+                if (mc.getConnection() != null) {
+                    mc.getConnection().sendCommand("refuge tp " + arg);
+                }
+            });
         }
     }
 
@@ -466,7 +531,36 @@ implements Module {
      * Ping key handler: single press drops a ping where the player is looking; a second press within
      * {@value #PING_DOUBLE_MS} ms removes it (so a double-tap toggles off). No chat message either way.
      */
-    public void onPingKey() {
+    /** Poll-driven ping input: quick tap = generic ping (double-tap clears); holding past
+     *  PING_WHEEL_HOLD_MS opens the ping wheel, and releasing places a ping of the pointed-at sector. */
+    private void tickPingInput(Minecraft client, long now) {
+        if (!GroupsCache.inGroup()) {
+            this.pingWasHeld = false;
+            this.pingWheelOpen = false;
+            return;
+        }
+        boolean held = Keybinds.pingKeyHeld();
+        if (held && !this.pingWasHeld) {
+            this.pingPressStart = now;
+            this.pingWheelOpen = false;
+        } else if (held && !this.pingWheelOpen && client.screen == null && now - this.pingPressStart >= PING_WHEEL_HOLD_MS) {
+            this.pingWheelOpen = true;
+            client.setScreen((Screen)new PingWheelScreen());
+        } else if (!held && this.pingWasHeld) {
+            if (this.pingWheelOpen && client.screen instanceof PingWheelScreen) {
+                String cat = ((PingWheelScreen)client.screen).selectedCategory();
+                client.setScreen((Screen)null);
+                this.placePing(cat);
+            } else if (!this.pingWheelOpen) {
+                this.onPingTap();
+            }
+            this.pingWheelOpen = false;
+        }
+        this.pingWasHeld = held;
+    }
+
+    /** Quick tap of the ping key: place a generic ping, or clear it on a double-tap. */
+    private void onPingTap() {
         if (!GroupsCache.inGroup()) {
             return;
         }
@@ -476,11 +570,12 @@ implements Module {
         if (doubleTap) {
             this.clearPing();
         } else {
-            this.placePing();
+            this.placePing("");
         }
     }
 
-    private void placePing() {
+    /** Places a categorized ping at the looked-at point. {@code cat} is "" (generic) or a wheel category. */
+    public void placePing(String cat) {
         Minecraft mc = Minecraft.getInstance();
         if (mc.player == null || mc.level == null) {
             return;
@@ -495,11 +590,12 @@ implements Module {
         if (self == null) {
             return;
         }
-        String body = String.format(Locale.ROOT, "{\"uuid\":\"%s\",\"name\":\"%s\",\"x\":%.2f,\"y\":%.2f,\"z\":%.2f,\"dim\":\"%s\"}",
-                esc(self), esc(selfName()), point.x, point.y, point.z, esc(dim));
+        String c = cat == null ? "" : cat;
+        String body = String.format(Locale.ROOT, "{\"uuid\":\"%s\",\"name\":\"%s\",\"x\":%.2f,\"y\":%.2f,\"z\":%.2f,\"dim\":\"%s\",\"cat\":\"%s\"}",
+                esc(self), esc(selfName()), point.x, point.y, point.z, esc(dim), esc(c));
         this.postPing(ModInfo.API_BASE + "/group/ping", body);
         // Instant delivery to connected members (the POST above is persistence + offline fallback).
-        RealtimeClient.sendPing(point.x, point.y, point.z, dim);
+        RealtimeClient.sendPing(point.x, point.y, point.z, dim, c);
         if (mc.player != null) {
             mc.player.playSound((net.minecraft.sounds.SoundEvent)net.minecraft.sounds.SoundEvents.NOTE_BLOCK_PLING.value(), 0.5f, 1.7f);
         }
@@ -668,8 +764,10 @@ implements Module {
         // Shared pings: always a labeled beacon (a navigation target), regardless of marker style.
         for (PingCache.Ping p : PingCache.pings()) {
             if (!playerDim.isEmpty() && !p.dim().isEmpty() && !playerDim.equals(p.dim())) continue;
-            String label = "⚑ " + (p.name() == null ? "?" : p.name());
-            WaypointsModule.renderScreenBeacon(ctx, client, tickDelta, p.x(), p.y(), p.z(), label, PING_COLOR);
+            String name = p.name() == null ? "?" : p.name();
+            String catLabel = pingCatLabel(p.cat());
+            String label = catLabel.isEmpty() ? ("⚑ " + name) : ("⚑ " + catLabel + " · " + name);
+            WaypointsModule.renderScreenBeacon(ctx, client, tickDelta, p.x(), p.y(), p.z(), label, pingColor(p.cat()));
         }
     }
 

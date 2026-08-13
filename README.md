@@ -44,6 +44,23 @@ Historique des modifications par version. Nom du jar :
 `zombiezcompanionV2-<version_minecraft>-<version_mod>`. Depuis 1.8.0, deux jars par version
 (26.1.2 et 1.21.4) ; l'updater in-mod lit le canal correspondant (branche `26.1.2` ou `master`).
 
+### 1.9.0
+- **Timer du Monarque Damné** : compte à rebours **synchronisé en ligne** vers le prochain spawn du boss
+  (respawn fixe d'1 h). Détecté à sa mort dans le chat (« LE MONARQUE DAMNÉ a été terrassé »), le chrono
+  repart à 60 min pour tout le groupe. Dernière minute : passage **en secondes + clignotement** sur le HUD
+  et **alerte sonore** configurable ; sinon affiche « Boss en vie ✓ ». Élément HUD déplaçable.
+- **Roue de ping** : maintenir la touche de ping ouvre une **roue radiale** (caméra figée) pour choisir la
+  catégorie — **Danger / Loot / Aide / Ennemi** (haut/bas/gauche/droite) ; un simple appui pose un ping
+  générique. Un léger mouvement suffit à sélectionner. Couleur et libellé du ping selon la catégorie.
+- **Suivi du chef en temps réel** : le suivi de téléport refuge/spawn passe aussi par **WebSocket**
+  (livraison instantanée), en plus du POST + polling conservés comme filet de sécurité.
+- **Alertes sonores de spawn configurables** : au spawn d'un **boss** ou d'un **marchand**, son vanilla
+  au choix. Sélection façon sélecteur d'objet — **clic ouvre une liste de ~30 sons** (avec aperçu au clic)
+  dont l'option **« Aucun »** (défaut). Volume réglable.
+- **Menus d'options repliables** : les grosses sections de l'écran **Mini-Events** (Événements / Timers /
+  Sons / Raccourci) se **plient/déplient** via une encoche `▾`/`▸` ; l'état est mémorisé.
+- **Nettoyage de l'updater**.
+
 ### 1.8.0
 - **Support multi-version (26.1.2 + 1.21.4)** : le mod se construit désormais pour **deux versions de
   Minecraft** à partir d'une seule base de code (Stonecutter). Les joueurs en **1.21.4** ont leur propre

@@ -65,7 +65,8 @@ public final class PingCache {
                         double y = o.has("y") ? o.get("y").getAsDouble() : 0.0;
                         double z = o.has("z") ? o.get("z").getAsDouble() : 0.0;
                         String dim = o.has("dim") ? o.get("dim").getAsString() : "";
-                        list.add(new Ping(uuid, name, x, y, z, dim));
+                        String cat = o.has("cat") ? o.get("cat").getAsString() : "";
+                        list.add(new Ping(uuid, name, x, y, z, dim, cat));
                     }
                     catch (Exception exception) {
                         // skip malformed entry
@@ -79,6 +80,7 @@ public final class PingCache {
         }
     }
 
-    public record Ping(String uuid, String name, double x, double y, double z, String dim) {
+    /** {@code cat} is the ping category (danger/loot/help/enemy), or "" for a generic ping. */
+    public record Ping(String uuid, String name, double x, double y, double z, String dim, String cat) {
     }
 }

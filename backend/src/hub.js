@@ -29,7 +29,8 @@ export class Hub extends DurableObject {
     return new Response(null, { status: 101, webSocket: pair[0] });
   }
 
-  // Client -> server. Only two kinds: update our group, or emit a group ping.
+  // Client -> server. Three kinds: update our group, emit a group ping, or emit a group action
+  // (the chief's follow-me: refuge/spawn teleport, relayed instantly to the group).
   async webSocketMessage(ws, message) {
     if (typeof message !== "string") return;
     let msg;
@@ -42,6 +43,8 @@ export class Hub extends DurableObject {
       ws.serializeAttachment(a);
     } else if (msg.type === "ping") {
       this.relayPing(ws, msg);
+    } else if (msg.type === "action") {
+      this.relayAction(ws, msg);
     }
   }
 
@@ -77,8 +80,26 @@ export class Hub extends DurableObject {
       type: "ping",
       clear: !!msg.clear,
       x: Number(msg.x) || 0, y: Number(msg.y) || 0, z: Number(msg.z) || 0,
-      dim: String(msg.dim || ""), name: String(from.name || ""), from: from.uuid || "",
+      dim: String(msg.dim || ""), cat: String(msg.cat || "").slice(0, 16),
+      name: String(from.name || ""), from: from.uuid || "",
     });
+    for (const ws of this.ctx.getWebSockets()) {
+      const a = ws.deserializeAttachment() || {};
+      if (a.group && a.group === from.group) {
+        try { ws.send(payload); } catch {}
+      }
+    }
+  }
+
+  // Relay the chief's follow-action to sockets sharing the sender's group (instant). The sender's uuid
+  // comes from the connection attachment ("from"), so followers can verify it is actually their chief.
+  relayAction(fromWs, msg) {
+    const from = fromWs.deserializeAttachment() || {};
+    if (!from.group) return;
+    const action = String(msg.action || "").slice(0, 32);
+    const arg = String(msg.arg || "").slice(0, 32);
+    if (!action) return;
+    const payload = JSON.stringify({ type: "action", action, arg, from: from.uuid || "" });
     for (const ws of this.ctx.getWebSockets()) {
       const a = ws.deserializeAttachment() || {};
       if (a.group && a.group === from.group) {

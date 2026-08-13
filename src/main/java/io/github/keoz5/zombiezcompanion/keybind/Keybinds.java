@@ -6,7 +6,9 @@ import java.util.List;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.keymapping.v1.KeyMappingHelper;
 import net.minecraft.client.KeyMapping;
+import net.minecraft.client.Minecraft;
 import net.minecraft.resources.Identifier;
+import org.lwjgl.glfw.GLFW;
 
 public final class Keybinds {
     // Key categories are now identified by an Identifier (was a translation-key String).
@@ -110,6 +112,30 @@ public final class Keybinds {
 
     public static KeyMapping pingGroup() {
         return pingGroup;
+    }
+
+    /**
+     * Whether the ping key is physically held right now, polled straight from GLFW so it keeps working
+     * while a screen (the ping wheel) is open — unlike {@code consumeClick}/{@code isDown}. Handles both
+     * keyboard and mouse bindings.
+     */
+    public static boolean pingKeyHeld() {
+        if (pingGroup == null) {
+            return false;
+        }
+        InputConstants.Key key = InputConstants.getKey(pingGroup.saveString());
+        if (key == null) {
+            return false;
+        }
+        int value = key.getValue();
+        if (value < 0) {
+            return false;
+        }
+        long handle = Minecraft.getInstance().getWindow().handle();
+        if (key.getType() == InputConstants.Type.MOUSE) {
+            return GLFW.glfwGetMouseButton(handle, value) == 1;
+        }
+        return GLFW.glfwGetKey(handle, value) == 1;
     }
 
     public static List<KeyMapping> all() {

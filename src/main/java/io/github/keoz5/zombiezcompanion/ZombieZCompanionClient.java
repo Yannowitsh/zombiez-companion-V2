@@ -84,10 +84,8 @@ implements ClientModInitializer {
                 Minecraft.getInstance().setScreen((Screen)new SkullsManagerScreen(null, configManager, sm));
             }
         }, ZombieZCompanionClient::tpToEventRefuge, () -> {
-            GroupsModule gm = GroupsModule.get();
-            if (gm != null && moduleManager.isEnabled(GroupsModule.ID)) {
-                gm.onPingKey();
-            }
+            // Ping input (tap vs hold-for-wheel) is polled from GLFW in GroupsModule.onClientTick, so the
+            // press callback itself is a no-op; the keybind stays registered for binding/display.
         });
         moduleManager.startEnabledModules();
         configManager.save();
@@ -99,6 +97,7 @@ implements ClientModInitializer {
         HudElements.register("drop_notifications", "zombiezcompanion.hud.element.drop_notifications", 220, 25, 0.0, 0.5, true);
         HudElements.register("marchand_timer", "zombiezcompanion.hud.element.marchand_timer", 150, 16, 0.0, 0.3, true);
         HudElements.register("world_boss_timer", "zombiezcompanion.hud.element.world_boss_timer", 150, 16, 0.0, 0.36, true);
+        HudElements.register("monarch_timer", "zombiezcompanion.hud.element.monarch_timer", 150, 16, 0.0, 0.42, true);
         HudElements.register("lure_timer", "zombiezcompanion.hud.element.lure_timer", 110, 18, 0.0, 0.42, true);
         HudElements.register("flower_timer", "zombiezcompanion.hud.element.flower_timer", 150, 18, 0.0, 0.48, true);
         HudElements.register("mutant_sensor", "zombiezcompanion.hud.element.mutant_sensor", 140, 16, 0.0, 0.54, true);

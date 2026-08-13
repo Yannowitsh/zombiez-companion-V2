@@ -22,6 +22,8 @@ public final class ModConfig {
     public int schemaVersion = 7;
     public boolean debugMode = false;
     public Map<String, Boolean> moduleEnabled = new LinkedHashMap<String, Boolean>();
+    // Collapsed option-screen sections, keyed "<moduleId>:<sectionId>" (empty = all expanded).
+    public java.util.Set<String> collapsedSections = new java.util.HashSet<String>();
     public BrightnessConfig brightness = new BrightnessConfig();
     public MapConfig map = new MapConfig();
     public AutoTextConfig autoText = new AutoTextConfig();

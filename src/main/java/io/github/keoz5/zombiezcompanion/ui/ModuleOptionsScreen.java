@@ -52,6 +52,35 @@ extends Screen {
         return row;
     }
 
+    /** Height consumed by a collapsible section header (title bar + a small gap below). */
+    protected static final int SECTION_HEADER_H = 18;
+
+    /** Whether a section is currently expanded (default) rather than collapsed by the user. */
+    protected boolean sectionExpanded(String sectionId) {
+        return !this.configManager.get().collapsedSections.contains(this.module.id() + ":" + sectionId);
+    }
+
+    /** Adds a clickable collapsible section header at {@code y} (full panel width); returns the y just below it. */
+    protected int sectionHeader(String sectionId, Component title, int y) {
+        boolean expanded = this.sectionExpanded(sectionId);
+        int hx = this.panelX1 + 24;
+        int hw = this.panelX2 - this.panelX1 - 48;
+        MutableComponent label = Component.literal((String)(expanded ? "▾ " : "▸ "));
+        label = label.append(title);
+        this.addRenderableWidget(new StyledButton(hx, y, hw, 16, (Component)label, b -> this.toggleSection(sectionId), 0x60000000, 0x90000000, -8874241));
+        return y + SECTION_HEADER_H;
+    }
+
+    private void toggleSection(String sectionId) {
+        String key = this.module.id() + ":" + sectionId;
+        java.util.Set<String> set = this.configManager.get().collapsedSections;
+        if (!set.remove(key)) {
+            set.add(key);
+        }
+        this.configManager.save();
+        this.rebuildWidgets();
+    }
+
     protected StyledButton addCrossLink(int x, int y, int width, String moduleId, Component label) {
         StyledButton btn = new StyledButton(x, y, width, 18, label, b -> {
             ModuleManager mm = ZombieZCompanionClient.moduleManager();

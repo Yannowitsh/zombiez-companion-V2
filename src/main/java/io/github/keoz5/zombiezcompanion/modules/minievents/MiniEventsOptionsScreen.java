@@ -14,10 +14,8 @@ import net.minecraft.network.chat.Component;
 public final class MiniEventsOptionsScreen
 extends ModuleOptionsScreen {
     private final MiniEventsModule moduleRef;
-    private int evY;
-    private int timersY;
-    private int rangeY;
-    private int keybindY;
+    // Y of the spawn-stats blocks (drawn in render), or -1 when the "events" section is collapsed.
+    private int spawnBlockY = -1;
 
     public MiniEventsOptionsScreen(Screen parent, MiniEventsModule module, ConfigManager configManager) {
         super(parent, module, configManager);
@@ -26,51 +24,87 @@ extends ModuleOptionsScreen {
 
     @Override
     protected void initOptions() {
-        int x = this.panelX1 + 36;
-        int optionW = Math.max(220, this.panelX2 - this.panelX1 - 72);
+        int x = this.panelX1 + 24;
+        int optionW = this.panelX2 - this.panelX1 - 48;
         int gap = 18;
         int half = Math.max(100, (optionW - gap) / 2);
-        this.evY = this.contentY1 + 42;
-        this.addToggle(x, this.evY, (Component)Component.translatable((String)"zombiezcompanion.mini_events.toggle.fuyeur"), half, () -> this.config().fuyeur, v -> {
-            this.config().fuyeur = v;
-        });
-        this.addToggle(x + half + gap, this.evY, (Component)Component.translatable((String)"zombiezcompanion.mini_events.toggle.colis"), half, () -> this.config().colis, v -> {
-            this.config().colis = v;
-        });
-        this.addToggle(x, this.evY + 26, (Component)Component.translatable((String)"zombiezcompanion.mini_events.toggle.faille"), half, () -> this.config().faille, v -> {
-            this.config().faille = v;
-        });
-        this.addToggle(x + half + gap, this.evY + 26, (Component)Component.translatable((String)"zombiezcompanion.mini_events.toggle.pinata"), half, () -> this.config().pinata, v -> {
-            this.config().pinata = v;
-        });
-        this.addToggle(x, this.evY + 52, (Component)Component.translatable((String)"zombiezcompanion.mini_events.toggle.bombe"), half, () -> this.config().bombe, v -> {
-            this.config().bombe = v;
-        });
-        this.addToggle(x + half + gap, this.evY + 52, (Component)Component.translatable((String)"zombiezcompanion.mini_events.toggle.jackpot"), half, () -> this.config().jackpot, v -> {
-            this.config().jackpot = v;
-        });
-        this.addToggle(x, this.evY + 78, (Component)Component.translatable((String)"zombiezcompanion.mini_events.toggle.marchand"), half, () -> this.config().marchand, v -> {
-            this.config().marchand = v;
-        });
-        this.addToggle(x + half + gap, this.evY + 78, (Component)Component.translatable((String)"zombiezcompanion.mini_events.toggle.assaut"), half, () -> this.config().assaut, v -> {
-            this.config().assaut = v;
-        });
-        this.addToggle(x, this.evY + 104, (Component)Component.translatable((String)"zombiezcompanion.mini_events.toggle.world_boss"), half, () -> this.config().worldBoss, v -> {
-            this.config().worldBoss = v;
-        });
-        this.addRenderableWidget(new StyledSlider(x, this.evY + 132, optionW, 22, this.config().detectionRange, 32.0, 100.0, v -> {
-            this.config().detectionRange = (int)Math.round(v);
-        }, v -> Component.translatable((String)"zombiezcompanion.mini_events.slider.range", (Object[])new Object[]{(int)Math.round(v)})));
-        this.rangeY = this.evY + 130;
-        this.timersY = this.evY + 166;
-        this.addToggle(x, this.timersY + 14, (Component)Component.translatable((String)"zombiezcompanion.mini_events.toggle.marchand_timer"), half, () -> this.config().marchandTimer, v -> {
-            this.config().marchandTimer = v;
-        });
-        this.addToggle(x + half + gap, this.timersY + 14, (Component)Component.translatable((String)"zombiezcompanion.mini_events.toggle.world_boss_timer"), half, () -> this.config().worldBossTimer, v -> {
-            this.config().worldBossTimer = v;
-        });
-        this.keybindY = this.timersY + 100;
-        this.addKeybindRow(x, this.keybindY + 14, optionW, Keybinds.tpRefuge(), (Component)Component.translatable((String)"key.zombiezcompanion.tp_refuge"));
+        int rx = x + half + gap;
+        int y = this.contentY1 + 8;
+        this.spawnBlockY = -1;
+
+        // --- Événements ---
+        y = this.sectionHeader("events", (Component)Component.translatable((String)"zombiezcompanion.mini_events.section.events"), y);
+        if (this.sectionExpanded("events")) {
+            this.addToggle(x, y, (Component)Component.translatable((String)"zombiezcompanion.mini_events.toggle.fuyeur"), half, () -> this.config().fuyeur, v -> this.config().fuyeur = v);
+            this.addToggle(rx, y, (Component)Component.translatable((String)"zombiezcompanion.mini_events.toggle.colis"), half, () -> this.config().colis, v -> this.config().colis = v);
+            y += 24;
+            this.addToggle(x, y, (Component)Component.translatable((String)"zombiezcompanion.mini_events.toggle.faille"), half, () -> this.config().faille, v -> this.config().faille = v);
+            this.addToggle(rx, y, (Component)Component.translatable((String)"zombiezcompanion.mini_events.toggle.pinata"), half, () -> this.config().pinata, v -> this.config().pinata = v);
+            y += 24;
+            this.addToggle(x, y, (Component)Component.translatable((String)"zombiezcompanion.mini_events.toggle.bombe"), half, () -> this.config().bombe, v -> this.config().bombe = v);
+            this.addToggle(rx, y, (Component)Component.translatable((String)"zombiezcompanion.mini_events.toggle.jackpot"), half, () -> this.config().jackpot, v -> this.config().jackpot = v);
+            y += 24;
+            this.addToggle(x, y, (Component)Component.translatable((String)"zombiezcompanion.mini_events.toggle.marchand"), half, () -> this.config().marchand, v -> this.config().marchand = v);
+            this.addToggle(rx, y, (Component)Component.translatable((String)"zombiezcompanion.mini_events.toggle.assaut"), half, () -> this.config().assaut, v -> this.config().assaut = v);
+            y += 24;
+            this.addToggle(x, y, (Component)Component.translatable((String)"zombiezcompanion.mini_events.toggle.world_boss"), half, () -> this.config().worldBoss, v -> this.config().worldBoss = v);
+            y += 26;
+            this.addRenderableWidget(new StyledSlider(x, y, optionW, 22, this.config().detectionRange, 32.0, 100.0, v -> {
+                this.config().detectionRange = (int)Math.round(v);
+            }, v -> Component.translatable((String)"zombiezcompanion.mini_events.slider.range", (Object[])new Object[]{(int)Math.round(v)})));
+            y += 28;
+            this.spawnBlockY = y;
+            y += 92;
+        }
+        y += 4;
+
+        // --- Timers ---
+        y = this.sectionHeader("timers", (Component)Component.translatable((String)"zombiezcompanion.mini_events.section.timers"), y);
+        if (this.sectionExpanded("timers")) {
+            this.addToggle(x, y, (Component)Component.translatable((String)"zombiezcompanion.mini_events.toggle.marchand_timer"), half, () -> this.config().marchandTimer, v -> this.config().marchandTimer = v);
+            this.addToggle(rx, y, (Component)Component.translatable((String)"zombiezcompanion.mini_events.toggle.world_boss_timer"), half, () -> this.config().worldBossTimer, v -> this.config().worldBossTimer = v);
+            y += 24;
+            this.addToggle(x, y, (Component)Component.translatable((String)"zombiezcompanion.mini_events.toggle.monarch_timer"), half, () -> this.config().monarchTimer, v -> this.config().monarchTimer = v);
+            y += 24;
+        }
+        y += 4;
+
+        // --- Sons ---
+        y = this.sectionHeader("sound", (Component)Component.translatable((String)"zombiezcompanion.mini_events.section.sound"), y);
+        if (this.sectionExpanded("sound")) {
+            this.addSoundButton(x, y, optionW, "zombiezcompanion.mini_events.sound.world_boss", () -> this.config().worldBossSoundId, v -> this.config().worldBossSoundId = v);
+            y += 24;
+            this.addSoundButton(x, y, optionW, "zombiezcompanion.mini_events.sound.marchand", () -> this.config().marchandSoundId, v -> this.config().marchandSoundId = v);
+            y += 24;
+            this.addSoundButton(x, y, optionW, "zombiezcompanion.mini_events.sound.monarch", () -> this.config().monarchSoundId, v -> this.config().monarchSoundId = v);
+            y += 24;
+            this.addRenderableWidget(new StyledSlider(x, y, optionW, 22, this.config().spawnSoundVolume, 0.0, 100.0, v -> {
+                this.config().spawnSoundVolume = (int)Math.round(v);
+            }, v -> Component.translatable((String)"zombiezcompanion.mini_events.slider.sound_volume", (Object[])new Object[]{(int)Math.round(v)})));
+            y += 28;
+        }
+        y += 4;
+
+        // --- Raccourci ---
+        y = this.sectionHeader("keybind", (Component)Component.translatable((String)"zombiezcompanion.mini_events.section.keybind"), y);
+        if (this.sectionExpanded("keybind")) {
+            this.addKeybindRow(x, y, optionW, Keybinds.tpRefuge(), (Component)Component.translatable((String)"key.zombiezcompanion.tp_refuge"));
+        }
+    }
+
+    private static Component soundLabel(String prefixKey, String id) {
+        String sound = id == null || id.isEmpty()
+            ? Component.translatable((String)"zombiezcompanion.mini_events.sound.none").getString()
+            : SpawnSounds.label(id);
+        return (Component)Component.literal((String)(Component.translatable((String)prefixKey).getString() + " — " + sound));
+    }
+
+    private void addSoundButton(int x, int y, int w, String prefixKey, java.util.function.Supplier<String> getter, java.util.function.Consumer<String> setter) {
+        this.addRenderableWidget(new StyledButton(x, y, w, 20, MiniEventsOptionsScreen.soundLabel(prefixKey, getter.get()), button -> {
+            if (this.minecraft != null) {
+                this.minecraft.setScreen((Screen)new SoundPickerScreen(this, getter.get(), setter, (float)this.config().spawnSoundVolume / 100.0f));
+            }
+        }, -266723542, -265932737, -854792));
     }
 
     private void addToggle(int x, int y, Component label, int w, BoolGetter getter, BoolSetter setter) {
@@ -91,13 +125,13 @@ extends ModuleOptionsScreen {
     }
 
     /** One event's stats block in the menu: probable next spawn, distribution histogram, range + median. */
-    private void drawSpawnBlock(GuiGraphicsExtractor ctx, int bx, int w, boolean boss) {
+    private void drawSpawnBlock(GuiGraphicsExtractor ctx, int bx, int baseY, int w, boolean boss) {
         String labelKey = boss ? "zombiezcompanion.mini_events.next.world_boss" : "zombiezcompanion.mini_events.next.marchand";
-        ctx.text(this.font, (Component)Component.translatable((String)labelKey, (Object[])new Object[]{this.nextValue(boss)}), bx, this.timersY + 40, -8353376, false);
-        MiniEventsModule.drawSpawnHistogram(ctx, bx, this.timersY + 52, w, 28, this.moduleRef.spawnHistory(boss), this.moduleRef.accentColor(boss));
+        ctx.text(this.font, (Component)Component.translatable((String)labelKey, (Object[])new Object[]{this.nextValue(boss)}), bx, baseY, -8353376, false);
+        MiniEventsModule.drawSpawnHistogram(ctx, bx, baseY + 12, w, 28, this.moduleRef.spawnHistory(boss), this.moduleRef.accentColor(boss));
         String med = Component.translatable((String)"zombiezcompanion.mini_events.median").getString();
         String sub = this.moduleRef.intervalRangeText(boss) + "  ·  " + med + " " + this.moduleRef.medianText(boss);
-        ctx.text(this.font, (Component)Component.literal((String)sub), bx, this.timersY + 84, -8355712, false);
+        ctx.text(this.font, (Component)Component.literal((String)sub), bx, baseY + 44, -8355712, false);
     }
 
     /** "dans ~Xm" / "en retard ~Xm" / "pas assez de données" for the probable next spawn. */
@@ -123,32 +157,27 @@ extends ModuleOptionsScreen {
         //?} else {
         /*super.render(ctx, mouseX, mouseY, delta);
         *///?}
-        int x = this.panelX1 + 36;
-        ctx.text(this.font, (Component)Component.translatable((String)"zombiezcompanion.mini_events.options.header"), x, this.contentY1 + 12, -854792);
-        ctx.text(this.font, (Component)Component.translatable((String)"zombiezcompanion.mini_events.section.events"), x, this.evY - 14, -8874241, false);
-        ctx.text(this.font, (Component)Component.translatable((String)"zombiezcompanion.mini_events.section.timers"), x, this.timersY, -8874241, false);
-        int gap = 18;
-        int optionW = Math.max(220, this.panelX2 - this.panelX1 - 72);
-        int half = Math.max(100, (optionW - gap) / 2);
-        int rx = x + half + gap;
-        this.drawSpawnBlock(ctx, x, half, false);
-        this.drawSpawnBlock(ctx, rx, half, true);
-        ctx.text(this.font, (Component)Component.translatable((String)"zombiezcompanion.mini_events.section.keybind"), x, this.keybindY, -8874241, false);
+        // Spawn-stats blocks: drawn just below the range slider, only while the "events" section is expanded.
+        if (this.spawnBlockY >= 0) {
+            int x = this.panelX1 + 24;
+            int gap = 18;
+            int optionW = this.panelX2 - this.panelX1 - 48;
+            int half = Math.max(100, (optionW - gap) / 2);
+            int rx = x + half + gap;
+            this.drawSpawnBlock(ctx, x, this.spawnBlockY, half, false);
+            this.drawSpawnBlock(ctx, rx, this.spawnBlockY, half, true);
+        }
     }
 
     @Override
     protected void renderOptionsBackground(GuiGraphicsExtractor ctx) {
         int x = this.panelX1 + 24;
-        int y = this.contentY1 + 18;
+        int y = this.contentY1 + 4;
         int w = this.panelX2 - this.panelX1 - 48;
-        int h = 330;
+        int h = this.contentY2 - y - 8;
         ctx.fill(x + 2, y + 3, x + w + 2, y + h + 3, -1442840576);
         ctx.fill(x, y, x + w, y + h, -267053025);
         ctx.fill(x, y, x + w, y + 2, -8874241);
-        int divY = this.timersY - 8;
-        ctx.fill(x + 12, divY, x + w - 12, divY + 1, -14736594);
-        int divY2 = this.keybindY - 8;
-        ctx.fill(x + 12, divY2, x + w - 12, divY2 + 1, -14736594);
         ctx.outline(x, y, w, h, -14736594);
     }
 

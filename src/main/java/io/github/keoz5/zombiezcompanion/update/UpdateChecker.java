@@ -71,7 +71,9 @@ public final class UpdateChecker {
 
     private static void checkAsync() {
         inFlight = true;
-        String url = RAW_BASE + "/" + UpdateChecker.branch() + "/update.json?t=" + System.currentTimeMillis();
+        // No cache-buster: raw.githubusercontent.com ignores the query string and caches ~5 min regardless,
+        // so a "?t=" only added noise.
+        String url = RAW_BASE + "/" + UpdateChecker.branch() + "/update.json";
         try {
             HttpRequest req = HttpRequest.newBuilder().uri(URI.create(url)).timeout(Duration.ofSeconds(6L)).GET().build();
             HttpClients.SHARED.sendAsync(req, HttpResponse.BodyHandlers.ofString()).whenComplete((resp, err) -> {

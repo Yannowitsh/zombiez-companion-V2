@@ -118,6 +118,12 @@ implements Module {
     // Zone parsed inside the current header window ("Zone N" / "Localisé en Zone N"); -1 = unknown.
     private int marchandZone = -1;
     private int bossZone = -1;
+    // Le Monarque Damné: epoch ms of the next spawn (0 = unknown/alive), and whether the <1min alert fired.
+    private long monarchNextSpawn;
+    private boolean monarchAlerted;
+    // Death line is matched against the diacritics-stripped, lowercased chat text.
+    private static final Pattern MONARCH_DEATH = Pattern.compile("monarque damn.*terrass");
+    private static final long MONARCH_RESPAWN_MS = 3600000L;
     private static final Pattern MARCHAND_COORDS = Pattern.compile("(-?\\d+)\\s*,\\s*(-?\\d+)\\s*,\\s*(-?\\d+)");
     private static final Pattern MARCHAND_DURATION = Pattern.compile("(\\d+)\\s*:\\s*(\\d{1,2})");
     // "Localisé en Zone 6", "◆ SUPER MARCHAND · Zone 8" -> zone number.
@@ -270,9 +276,22 @@ implements Module {
         }
         long nowMs = System.currentTimeMillis();
         this.pruneStaleEventWaypoints(nowMs);
-        if ((this.config().marchandTimer || this.config().worldBossTimer) && nowMs >= this.nextSpawnFetchMs) {
-            this.fetchSpawns();
+        if ((this.config().marchandTimer || this.config().worldBossTimer || this.config().monarchTimer) && nowMs >= this.nextSpawnFetchMs) {
+            if (this.config().marchandTimer || this.config().worldBossTimer) {
+                this.fetchSpawns();
+            }
+            if (this.config().monarchTimer) {
+                this.fetchMonarch();
+            }
             this.nextSpawnFetchMs = nowMs + 60000L;
+        }
+        // Monarque: fire the configured sound once when the countdown first drops under a minute.
+        if (this.config().monarchTimer && this.monarchNextSpawn > 0L && !this.monarchAlerted) {
+            long rem = this.monarchNextSpawn - nowMs;
+            if (rem > 0L && rem <= 60000L) {
+                this.monarchAlerted = true;
+                SpawnSounds.play(this.config().monarchSoundId, (float)this.config().spawnSoundVolume / 100.0f);
+            }
         }
         if (ZombieZMapData.isInSpawn(client.player.getX(), client.player.getZ())) {
             this.entityEvents.clear();
@@ -362,6 +381,10 @@ implements Module {
         }
         if (cfg.worldBoss) {
             this.handleWorldBossLine(txt, ascii);
+        }
+        if (cfg.monarchTimer && MONARCH_DEATH.matcher(ascii).find()) {
+            // Boss killed: the next spawn is a fixed hour away. Share it so late-joiners see the countdown.
+            this.setMonarch(System.currentTimeMillis() + MONARCH_RESPAWN_MS, true);
         }
         Minecraft mc = Minecraft.getInstance();
         boolean bl = inSpawn = mc.player != null && ZombieZMapData.isInSpawn(mc.player.getX(), mc.player.getZ());
@@ -516,6 +539,7 @@ implements Module {
 
     private void createMarchandWaypoint(int x, int y, int z, int zone, long now) {
         this.recordSpawn(false, now);
+        boolean wasActive = this.marchandWaypointId != null;
         MapConfig map = this.configManager.get().map;
         this.removeMarchandWaypoint(map);
         MapConfig.Waypoint wp = new MapConfig.Waypoint();
@@ -531,6 +555,9 @@ implements Module {
         wp.dimension = MiniEventsModule.dimensionForZone(zone);
         map.waypoints.add(wp);
         this.marchandWaypointId = wp.id;
+        if (!wasActive) {
+            SpawnSounds.play(this.config().marchandSoundId, (float)this.config().spawnSoundVolume / 100.0f);
+        }
         this.marchandExpiresAt = now + 300000L;
         this.marchandHeaderUntil = 0L;
         this.marchandZone = -1;
@@ -574,6 +601,48 @@ implements Module {
 
     private void fetchSpawns() {
         this.getAsync(ModInfo.API_BASE + "/spawns").thenAccept(SpawnSync::update);
+    }
+
+    // --- Le Monarque Damné (fixed 1h respawn, shared across players via the backend) ---
+
+    /** Sets the next-spawn time locally (re-arming the <1min alert) and optionally shares it with the backend. */
+    private void setMonarch(long nextSpawn, boolean share) {
+        if (nextSpawn == this.monarchNextSpawn) {
+            return;
+        }
+        this.monarchNextSpawn = nextSpawn;
+        // Re-arm the alert unless we already start inside the final minute (e.g. a late fetch).
+        this.monarchAlerted = nextSpawn <= 0L || System.currentTimeMillis() > nextSpawn - 60000L;
+        if (share) {
+            this.postMonarch(nextSpawn);
+        }
+    }
+
+    private void fetchMonarch() {
+        this.getAsync(ModInfo.API_BASE + "/monarch").thenAccept(resp -> {
+            if (resp == null) {
+                return;
+            }
+            try {
+                com.google.gson.JsonObject o = com.google.gson.JsonParser.parseString((String)resp).getAsJsonObject();
+                long next = o.has("nextSpawn") ? o.get("nextSpawn").getAsLong() : 0L;
+                Minecraft.getInstance().execute(() -> this.setMonarch(next, false));
+            }
+            catch (Exception ignored) {
+                // malformed response
+            }
+        });
+    }
+
+    private void postMonarch(long nextSpawn) {
+        try {
+            String body = "{\"nextSpawn\":" + nextSpawn + "}";
+            HttpRequest req = HttpRequest.newBuilder().uri(URI.create(ModInfo.API_BASE + "/monarch")).timeout(Duration.ofSeconds(5L)).header("Content-Type", "application/json").POST(HttpRequest.BodyPublishers.ofString(body)).build();
+            HttpClients.SHARED.sendAsync(req, HttpResponse.BodyHandlers.discarding()).exceptionally(t -> null);
+        }
+        catch (Exception exception) {
+            // empty catch block
+        }
     }
 
     private void postSpawn(boolean boss, long now) {
@@ -643,6 +712,45 @@ implements Module {
         ctx.fill(0, 0, baseW, baseH, -1442840576);
         ctx.fill(0, 0, baseW, 1, accent);
         ctx.text(tr, (Component)line, 6, 4, -1);
+        ctx.pose().popMatrix();
+    }
+
+    /** HUD countdown for Le Monarque Damné: MM:SS, seconds + blinking red under a minute, or "Boss en vie". */
+    private void renderMonarchTimer(GuiGraphicsExtractor ctx, Minecraft client) {
+        long now = System.currentTimeMillis();
+        long rem = this.monarchNextSpawn - now;
+        boolean alive = this.monarchNextSpawn <= 0L || rem <= 0L;
+        boolean urgent = !alive && rem <= 60000L;
+        String value;
+        if (alive) {
+            value = Component.translatable((String)"zombiezcompanion.mini_events.monarch.alive").getString();
+        } else if (urgent) {
+            value = (rem + 999L) / 1000L + "s";
+        } else {
+            long secs = (rem + 999L) / 1000L;
+            value = String.format(Locale.ROOT, "%d:%02d", secs / 60L, secs % 60L);
+        }
+        MutableComponent line = Component.translatable((String)"zombiezcompanion.mini_events.monarch.timer", (Object[])new Object[]{value});
+        Font tr = client.font;
+        int baseW = tr.width((FormattedText)line) + 12;
+        int baseH = 16;
+        HudConfig hud = this.configManager.get().hud;
+        double scale = HudAnchor.scale(hud, "monarch_timer");
+        int sw = (int)Math.round((double)baseW * scale);
+        int sh = (int)Math.round((double)baseH * scale);
+        int x = HudAnchor.resolveX(hud, "monarch_timer", ctx.guiWidth(), sw, 0.0);
+        int y = HudAnchor.resolveY(hud, "monarch_timer", ctx.guiHeight(), sh, 0.42);
+        HudElements.report("monarch_timer", x, y, sw, sh);
+        boolean flash = urgent && (now / 400L) % 2L == 0L;
+        int accent = alive ? 0xFF33FF7A : (urgent ? 0xFFFF4040 : MiniEventType.WORLD_BOSS.color() | 0xFF000000);
+        ctx.pose().pushMatrix();
+        io.github.keoz5.zombiezcompanion.compat.ZCPose.translate(ctx, (float)x, (float)y);
+        if (scale != 1.0) {
+            io.github.keoz5.zombiezcompanion.compat.ZCPose.scale(ctx, (float)scale, (float)scale);
+        }
+        ctx.fill(0, 0, baseW, baseH, flash ? -1056964608 : -1442840576);
+        ctx.fill(0, 0, baseW, 1, accent);
+        ctx.text(tr, (Component)line, 6, 4, urgent && !flash ? -30584 : -1);
         ctx.pose().popMatrix();
     }
 
@@ -931,6 +1039,9 @@ implements Module {
         wp.dimension = MiniEventsModule.dimensionForZone(zone);
         map.waypoints.add(wp);
         this.bossWaypointId = wp.id;
+        if (!wasActive) {
+            SpawnSounds.play(this.config().worldBossSoundId, (float)this.config().spawnSoundVolume / 100.0f);
+        }
         this.bossHeaderUntil = 0L;
         this.bossZone = -1;
         this.configManager.save();
@@ -1287,6 +1398,9 @@ implements Module {
             }
             if (this.config().worldBossTimer) {
                 this.renderSpawnTimer(ctx, client, true, "world_boss_timer", "zombiezcompanion.mini_events.world_boss.timer", 0.36);
+            }
+            if (this.config().monarchTimer) {
+                this.renderMonarchTimer(ctx, client);
             }
         }
         if (this.entityEvents.isEmpty() && this.colisEvents.isEmpty() && this.toasts.isEmpty()) {

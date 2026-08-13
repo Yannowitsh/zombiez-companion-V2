@@ -5,6 +5,7 @@ import com.google.gson.JsonParser;
 import io.github.keoz5.zombiezcompanion.ModInfo;
 import io.github.keoz5.zombiezcompanion.log.Log;
 import io.github.keoz5.zombiezcompanion.modules.groups.GroupsCache;
+import io.github.keoz5.zombiezcompanion.modules.groups.GroupsModule;
 import io.github.keoz5.zombiezcompanion.modules.groups.PingCache;
 import io.github.keoz5.zombiezcompanion.modules.map.ZombieZDetector;
 import io.github.keoz5.zombiezcompanion.net.HttpClients;
@@ -115,14 +116,19 @@ public final class RealtimeClient {
     }
 
     /** Instantly relay a group ping to connected members (in addition to the persisted POST). */
-    public static void sendPing(double x, double y, double z, String dim) {
+    public static void sendPing(double x, double y, double z, String dim, String cat) {
         trySend(String.format(java.util.Locale.ROOT,
-            "{\"type\":\"ping\",\"x\":%.2f,\"y\":%.2f,\"z\":%.2f,\"dim\":\"%s\"}", x, y, z, esc(dim)));
+            "{\"type\":\"ping\",\"x\":%.2f,\"y\":%.2f,\"z\":%.2f,\"dim\":\"%s\",\"cat\":\"%s\"}", x, y, z, esc(dim), esc(cat)));
     }
 
     /** Instantly clear our group ping for connected members. */
     public static void sendPingClear() {
         trySend("{\"type\":\"ping\",\"clear\":true}");
+    }
+
+    /** Instantly relay the chief's follow-action (refuge/spawn) to connected members (in addition to the POST). */
+    public static void sendAction(String action, String arg) {
+        trySend("{\"type\":\"action\",\"action\":\"" + esc(action) + "\",\"arg\":\"" + esc(arg) + "\"}");
     }
 
     private static String currentGroup() {
@@ -158,7 +164,22 @@ public final class RealtimeClient {
                     double y = o.has("y") ? o.get("y").getAsDouble() : 0.0;
                     double z = o.has("z") ? o.get("z").getAsDouble() : 0.0;
                     String dim = o.has("dim") ? o.get("dim").getAsString() : "";
-                    PingCache.put(new PingCache.Ping(from, name, x, y, z, dim));
+                    String cat = o.has("cat") ? o.get("cat").getAsString() : "";
+                    PingCache.put(new PingCache.Ping(from, name, x, y, z, dim, cat));
+                }
+            } else if ("action".equals(type)) {
+                if (!GroupsCache.inGroup()) {
+                    return;
+                }
+                String from = o.has("from") ? o.get("from").getAsString() : "";
+                String action = o.has("action") ? o.get("action").getAsString() : "";
+                String arg = o.has("arg") ? o.get("arg").getAsString() : "";
+                if (from.isEmpty() || action.isEmpty()) {
+                    return;
+                }
+                GroupsModule gm = GroupsModule.get();
+                if (gm != null) {
+                    gm.onRealtimeAction(from, action, arg);
                 }
             }
         } catch (Exception e) {

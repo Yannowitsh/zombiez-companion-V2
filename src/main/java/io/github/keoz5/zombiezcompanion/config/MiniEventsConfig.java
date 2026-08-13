@@ -18,5 +18,12 @@ public final class MiniEventsConfig {
     public boolean worldBossTimer = true;
     public List<Long> marchandSpawns = new ArrayList<Long>();
     public List<Long> worldBossSpawns = new ArrayList<Long>();
+    // Configurable spawn sound alerts. "" = no sound (default); otherwise a vanilla id from SpawnSounds.IDS.
+    public String worldBossSoundId = "";
+    public String marchandSoundId = "";
+    public int spawnSoundVolume = 100;
+    // Le Monarque Damné: fixed 1h respawn boss, HUD countdown synced online. "" = no 1-min alert sound.
+    public boolean monarchTimer = true;
+    public String monarchSoundId = "";
 }
 
