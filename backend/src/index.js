@@ -14,6 +14,13 @@ const json = (obj, status = 200) =>
   new Response(JSON.stringify(obj), { status, headers: { "content-type": "application/json" } });
 const noContent = () => new Response(null, { status: 204 });
 
+// --- Input validation helpers (reject/bound spoofed or garbage writes) ---
+const isNum = (n) => typeof n === "number" && Number.isFinite(n);
+// Clamp a world coordinate to the MC world-border range; non-numbers/NaN/Infinity -> 0.
+const clampCoord = (n) => (isNum(n) ? Math.max(-30000000, Math.min(30000000, n)) : 0);
+// Coerce to a length-capped string (defends KV key/value size + memory).
+const cap = (s, max) => String(s == null ? "" : s).slice(0, max);
+
 // Durable Object class for the realtime hub (WebSocket push). Must be re-exported from the entry module.
 export { Hub } from "./hub.js";
 
@@ -24,10 +31,23 @@ export default {
     const method = request.method;
     try {
       // Per-IP flood guard at the edge (no KV cost). Blocks request storms before any handler runs.
+      const ip = request.headers.get("CF-Connecting-IP") || "unknown";
       if (env.API_LIMITER) {
-        const ip = request.headers.get("CF-Connecting-IP") || "unknown";
         const { success } = await env.API_LIMITER.limit({ key: ip });
         if (!success) return json({ error: "rate_limited" }, 429);
+      }
+      // Writes are the costly path (KV writes ~$5/M). Extra guards on POSTs: a tighter per-IP cap and a
+      // global (constant-key) ceiling that also bounds a distributed flood. Both run before any handler,
+      // so a rejected write never touches KV. /discord is exempt (Discord-signed, own low volume).
+      if (method === "POST" && path !== "/discord") {
+        if (env.WRITE_LIMITER) {
+          const { success } = await env.WRITE_LIMITER.limit({ key: `w:${ip}` });
+          if (!success) return json({ error: "rate_limited" }, 429);
+        }
+        if (env.WRITE_GLOBAL_LIMITER) {
+          const { success } = await env.WRITE_GLOBAL_LIMITER.limit({ key: "global" });
+          if (!success) return json({ error: "rate_limited" }, 429);
+        }
       }
 
       if (method === "GET" && path === "/") return new Response("Zombiez Companion V2 API — ok");
@@ -153,7 +173,13 @@ async function handleDiscord(request, env) {
 async function handlePing(request, env) {
   const b = await readJson(request);
   if (!b || !b.uuid) return json({ error: "bad_request" }, 400);
-  await env.ZZC.put(`ping:${b.uuid}`, JSON.stringify({ ...b, last: Date.now() }), { expirationTtl: PING_TTL });
+  const uuid = cap(b.uuid, 64);
+  // Whitelist + cap fields (was {...b}) so a client can't stuff arbitrary/oversized data into KV.
+  const entry = {
+    uuid, modVersion: cap(b.modVersion, 32), mcVersion: cap(b.mcVersion, 32),
+    modules: cap(b.modules, 512), locale: cap(b.locale, 16), last: Date.now(),
+  };
+  await env.ZZC.put(`ping:${uuid}`, JSON.stringify(entry), { expirationTtl: PING_TTL });
   return noContent();
 }
 
@@ -204,8 +230,11 @@ function intervalStats(list) {
 
 async function postSpawn(request, env) {
   const b = await readJson(request);
-  if (!b || (b.type !== "marchand" && b.type !== "world_boss") || typeof b.at !== "number")
+  if (!b || (b.type !== "marchand" && b.type !== "world_boss") || !isNum(b.at))
     return json({ error: "bad_request" }, 400);
+  // A spawn is witnessed ~now; reject timestamps outside a sane window so bogus history can't be injected.
+  const now = Date.now();
+  if (b.at < now - 30 * 24 * 3600 * 1000 || b.at > now + 60000) return json({ error: "bad_request" }, 400);
   const key = `spawns:${b.type}`;
   const cur = await env.ZZC.get(key);
   let list = cur ? JSON.parse(cur) : [];
@@ -221,12 +250,13 @@ async function postSpawn(request, env) {
 async function postPresence(request, env) {
   const b = await readJson(request);
   if (!b || !b.uuid) return json({ error: "bad_request" }, 400);
+  const uuid = cap(b.uuid, 64);
   const entry = {
-    uuid: b.uuid, name: b.name || "?", server: b.server || "",
-    x: b.x || 0, y: b.y || 0, z: b.z || 0, dim: b.dim || "",
-    mcuuid: b.mcuuid || "", modVersion: b.modVersion || "", last_update: Date.now(),
+    uuid, name: cap(b.name || "?", 32), server: cap(b.server, 64),
+    x: clampCoord(b.x), y: clampCoord(b.y), z: clampCoord(b.z), dim: cap(b.dim, 64),
+    mcuuid: cap(b.mcuuid, 64), modVersion: cap(b.modVersion, 32), last_update: Date.now(),
   };
-  await env.ZZC.put(`presence:${b.uuid}`, JSON.stringify(entry), { expirationTtl: PRESENCE_TTL });
+  await env.ZZC.put(`presence:${uuid}`, JSON.stringify(entry), { expirationTtl: PRESENCE_TTL });
   return noContent();
 }
 
@@ -238,7 +268,10 @@ async function delPresence(path, env) {
 
 async function getPresence(url, env) {
   const server = url.searchParams.get("server");
-  const list = await env.ZZC.list({ prefix: "presence:" });
+  // Cap the fan-out: one GET per key, so bound how many keys a single request can read (legit online
+  // players are well under this; the cap stops an attacker who injected many presence rows from
+  // amplifying KV reads per request).
+  const list = await env.ZZC.list({ prefix: "presence:", limit: 300 });
   const presences = [];
   for (const k of list.keys) {
     const v = await env.ZZC.get(k.name);
@@ -319,7 +352,18 @@ function rosterContent(names) {
 async function postLeaderboard(request, env) {
   const b = await readJson(request);
   if (!b || !b.uuid) return json({ error: "bad_request" }, 400);
-  await env.ZZC.put(`lb:${b.uuid}`, JSON.stringify({ ...b, updated: Date.now() }));
+  const uuid = cap(b.uuid, 64);
+  // Whitelist + cap the known leaderboard fields (was {...b}) — no arbitrary/oversized values in KV.
+  const entry = {
+    uuid, name: cap(b.name || "?", 32),
+    prestige: isNum(b.prestige) ? b.prestige : 0,
+    level: isNum(b.level) ? b.level : 0,
+    rodeur: isNum(b.rodeur) ? b.rodeur : 0,
+    kills: isNum(b.kills) ? b.kills : 0,
+    points: isNum(b.points) ? b.points : 0,
+    updated: Date.now(),
+  };
+  await env.ZZC.put(`lb:${uuid}`, JSON.stringify(entry));
   return noContent();
 }
 
@@ -906,7 +950,10 @@ async function getMonarch(env) {
 
 async function postMonarch(request, env) {
   const b = await readJson(request);
-  if (!b || typeof b.nextSpawn !== "number") return json({ error: "bad_request" }, 400);
+  if (!b || !isNum(b.nextSpawn)) return json({ error: "bad_request" }, 400);
+  // Respawn is a fixed ~1h; reject values outside a sane window so a bogus countdown can't be planted.
+  const now = Date.now();
+  if (b.nextSpawn < now - 3600 * 1000 || b.nextSpawn > now + 2 * 3600 * 1000) return json({ error: "bad_request" }, 400);
   await env.ZZC.put("monarch:next", String(Math.floor(b.nextSpawn)), { expirationTtl: MONARCH_TTL });
   return noContent();
 }

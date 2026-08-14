@@ -22,6 +22,23 @@ name = "FEEDBACK_LIMITER"
 namespace_id = "1002"
 simple = { limit = 5, period = 60 }
 
+# Writes are the costly path (each POST can be a KV write at ~$5/M). Two extra guards on POSTs:
+#  - WRITE_LIMITER: per-IP, tighter than the global 300/min (a legit client writes presence a
+#    few times/min + the occasional friend/ping/spawn — 120/min is generous, floods get 429'd).
+#  - WRITE_GLOBAL_LIMITER: a single constant key => an aggregate ceiling on total writes/min, so a
+#    DISTRIBUTED flood (many IPs each under the per-IP cap) still can't blow up the KV bill. NB the
+#    rate-limit binding counts per-colo, so this bounds each data center, not a hard global count —
+#    good enough as a wallet guard; a Durable Object counter would make it strictly global later.
+[[ratelimits]]
+name = "WRITE_LIMITER"
+namespace_id = "1003"
+simple = { limit = 120, period = 60 }
+
+[[ratelimits]]
+name = "WRITE_GLOBAL_LIMITER"
+namespace_id = "1004"
+simple = { limit = 2000, period = 60 }
+
 # Every minute: refresh the "who's online" roster message in Discord (scheduled handler).
 [triggers]
 crons = ["* * * * *"]
