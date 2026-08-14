@@ -2,6 +2,19 @@ name = "zombiezcompanion-api"
 main = "src/index.js"
 compatibility_date = "2025-06-01"
 
+# Keep the workers.dev route LIVE alongside the custom domain — old clients (<=1.9.1) still call it.
+# Adding any route makes wrangler disable workers.dev unless this is set explicitly. Only flip to false
+# once <=1.9.1 clients have aged out (then all traffic flows through the WAF-protected custom domain).
+workers_dev = true
+
+# Custom domain (zone yannowitsh.dev, Cloudflare-managed). Adds zombiez.yannowitsh.dev pointing to this
+# Worker (DNS + cert auto-provisioned) WITHOUT disabling the workers.dev route — both stay live during
+# the rollout while old clients (<=1.9.1, which call the workers.dev URL) age out. Once adoption is high:
+# add zone rate-limiting + WAF rules on this hostname, then disable the workers.dev route.
+[[routes]]
+pattern = "zombiez.yannowitsh.dev"
+custom_domain = true
+
 # KV storage. Create it once with:
 #   wrangler kv namespace create ZZC
 # then paste the printed id below.

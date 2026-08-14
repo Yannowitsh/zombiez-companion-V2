@@ -44,6 +44,11 @@ Historique des modifications par version. Nom du jar :
 `zombiezcompanionV2-<version_minecraft>-<version_mod>`. Depuis 1.8.0, deux jars par version
 (26.1.2 et 1.21.4) ; l'updater in-mod lit le canal correspondant (branche `26.1.2` ou `master`).
 
+### 1.9.2
+- **Infrastructure** : l'API du mod passe sur un **domaine dédié** (`zombiez.yannowitsh.dev`) — plus robuste
+  et prêt pour des protections anti-abus renforcées. Transition transparente, rien à faire côté joueur.
+- **Backend durci** : validation stricte des écritures et garde-fous anti-spam (invisible en jeu).
+
 ### 1.9.1
 - **Amis cross-version corrigés** : l'identité amis/présence est désormais alignée sur le **vrai UUID
   Mojang** (résolu côté serveur), au lieu de l'UUID attribué par le serveur qui **diffère selon la version**.

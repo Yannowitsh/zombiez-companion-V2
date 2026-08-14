@@ -6,7 +6,7 @@ public final class ModInfo {
 
     // Backend API base URL. All network features (feedback, version check, spawn timers,
     // presence/leaderboard) go through this single endpoint.
-    public static final String API_BASE = "https://zombiezcompanion-api.zombiez-yannowitsh.workers.dev";
+    public static final String API_BASE = "https://zombiez.yannowitsh.dev";
 
     // Discord contact — opens yannowitsh's Discord profile. Swap for a server invite
     // (https://discord.gg/<code>) if you'd rather link a server.
