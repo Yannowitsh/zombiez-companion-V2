@@ -48,6 +48,13 @@ export default {
           const { success } = await env.WRITE_GLOBAL_LIMITER.limit({ key: "global" });
           if (!success) return json({ error: "rate_limited" }, 429);
         }
+        // Hard daily write budget = self-imposed wallet cap on the costly KV path (globally consistent
+        // via the single Hub DO). Fail-open on a DO error so a hiccup never blocks all writes.
+        if (env.HUB) {
+          let ok = true;
+          try { ok = await env.HUB.getByName("global").charge(); } catch { ok = true; }
+          if (!ok) return json({ error: "budget_exceeded" }, 503);
+        }
       }
 
       if (method === "GET" && path === "/") return new Response("Zombiez Companion V2 API — ok");
@@ -61,6 +68,7 @@ export default {
       if (path === "/discord" && method === "POST") return handleDiscord(request, env);
 
       if (path === "/version" && method === "GET") return json({ latest: env.LATEST_VERSION || null, url: env.DOWNLOAD_URL || null });
+      if (path === "/budget" && method === "GET") return getBudget(env);
       if (path === "/ping" && method === "POST") return handlePing(request, env);
       if (path === "/spawns" && method === "GET") return getSpawns(env);
       if (path === "/spawns/stats" && method === "GET") return getSpawnStats(env);
@@ -110,6 +118,12 @@ export default {
 
 async function readJson(request) {
   try { return await request.json(); } catch { return null; }
+}
+
+// Read-only view of today's write-budget usage (helps right-size WRITE_BUDGET_DAILY against real traffic).
+async function getBudget(env) {
+  try { return json(await env.HUB.getByName("global").budgetStatus()); }
+  catch { return json({ error: "unavailable" }, 503); }
 }
 
 // --- Discord slash commands (interactions endpoint) ----------------------

@@ -92,6 +92,29 @@ export class Hub extends DurableObject {
     return n;
   }
 
+  // Self-imposed daily write budget = a hard, globally-consistent wallet cap on the costly KV path.
+  // In-memory counter on this single DO instance (stays warm under load, incl. an attack); resets on
+  // the UTC day rollover. No storage writes -> zero extra cost, instant. If the DO is evicted it only
+  // happens when idle (low usage), so resetting the count then is harmless. Returns false once over cap.
+  charge() {
+    const day = Math.floor(Date.now() / 86400000);
+    if (this._budgetDay !== day) { this._budgetDay = day; this._budgetCount = 0; }
+    const v = Number(this.env && this.env.WRITE_BUDGET_DAILY);
+    const cap = Number.isFinite(v) && v > 0 ? v : 100000;
+    if (this._budgetCount >= cap) return false;
+    this._budgetCount++;
+    return true;
+  }
+
+  // Read-only view of today's write budget usage (for GET /budget), so the cap can be right-sized.
+  budgetStatus() {
+    const day = Math.floor(Date.now() / 86400000);
+    const count = this._budgetDay === day ? (this._budgetCount || 0) : 0;
+    const v = Number(this.env && this.env.WRITE_BUDGET_DAILY);
+    const cap = Number.isFinite(v) && v > 0 ? v : 100000;
+    return { day, count, cap };
+  }
+
   // ---- internal ----
 
   // Relay a ping to sockets sharing the sender's group (instant, no KV, no polling).

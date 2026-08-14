@@ -69,6 +69,10 @@ new_sqlite_classes = ["Hub"]
 
 # Update these on each mod release to drive the in-game update notification.
 [vars]
+# Hard daily write budget (self-imposed wallet cap on KV writes; enforced globally by the Hub DO's
+# charge()). Well above legit peak (~a few k/day at 3-5 players, ~<50k on a very busy 20-player day),
+# so real players never hit it. Check today's usage at GET /budget and lower this once you see reality.
+WRITE_BUDGET_DAILY = "100000"
 LATEST_VERSION = "1.0.2"
 DOWNLOAD_URL = "https://github.com/Yannowitsh/zombiez-companion-V2/releases"
 # Discord slash-command verification. DISCORD_PUBLIC_KEY = your app's public key (portal ->
