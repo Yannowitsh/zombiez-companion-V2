@@ -122,6 +122,11 @@ extends Screen {
                 this.minecraft.setScreen((Screen)new FeedbackScreen(this, this.configManager));
             }
         }, -266723542, -265932737, -854792));
+        this.addRenderableWidget(new StyledButton(this.panelX2 - 12 - 92 - 6 - 78 - 6 - 88 - 6 - 88, btnY, 88, btnH, (Component)Component.translatable((String)"zombiezcompanion.patchnote.button"), btn -> {
+            if (this.minecraft != null) {
+                this.minecraft.setScreen((Screen)new PatchnoteScreen(this));
+            }
+        }, -266723542, -265932737, -854792));
         this.addRenderableWidget(new StyledButton(this.panelX2 - 12 - 92, btnY, 92, btnH, (Component)Component.translatable((String)"zombiezcompanion.button.close"), btn -> this.onClose(), -266723542, -265932737, -854792));
         if (UpdateChecker.available()) {
             int titleX = this.panelX1 + 42;

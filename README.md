@@ -44,6 +44,21 @@ Historique des modifications par version. Nom du jar :
 `zombiezcompanionV2-<version_minecraft>-<version_mod>`. Depuis 1.8.0, deux jars par version
 (26.1.2 et 1.21.4) ; l'updater in-mod lit le canal correspondant (branche `26.1.2` ou `master`).
 
+### 1.9.3
+- **Présence migrée vers le hub temps réel** : la carte, le statut en ligne des amis, le TP rapide et le
+  badge « utilise le mod » passent désormais par le **WebSocket** déjà utilisé pour le suivi de groupe,
+  au lieu d'écritures en base à chaque déplacement. Plus réactif, et supprime la principale source de
+  coût d'infrastructure liée à la présence.
+  ⚠️ **Nécessite cette mise à jour** : les versions antérieures ne montreront plus personne en ligne tant
+  qu'elles ne sont pas mises à jour (tout le reste — événements, groupe, amis par pseudo, AutoText,
+  etc. — continue de fonctionner normalement).
+- **Optimisations réseau** : la carte ne rafraîchit la liste des joueurs que lorsqu'elle est réellement
+  ouverte ; Amis/Groupe utilisent désormais une requête ciblée à leurs seuls membres au lieu du roster
+  complet ; anti-AFK (coupe la diffusion de position après 3 min immobile, reprend au premier mouvement) ;
+  roster Discord « en ligne » espacé à 3 min.
+- **Bouton « Notes de version »** dans le menu (à côté de Feedback) : ouvre un aperçu des derniers
+  changements sans quitter le jeu.
+
 ### 1.9.2
 - **Infrastructure** : l'API du mod passe sur un **domaine dédié** (`zombiez.yannowitsh.dev`) — plus robuste
   et prêt pour des protections anti-abus renforcées. Transition transparente, rien à faire côté joueur.

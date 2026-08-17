@@ -9,24 +9,30 @@ import io.github.keoz5.zombiezcompanion.core.Module;
 import io.github.keoz5.zombiezcompanion.core.ModuleCategory;
 import io.github.keoz5.zombiezcompanion.core.ModuleContext;
 import io.github.keoz5.zombiezcompanion.core.ModuleManager;
+import io.github.keoz5.zombiezcompanion.modules.friends.FriendsCache;
 import io.github.keoz5.zombiezcompanion.modules.friends.FriendsModule;
+import io.github.keoz5.zombiezcompanion.modules.groups.GroupsCache;
 import io.github.keoz5.zombiezcompanion.modules.groups.GroupsModule;
 import io.github.keoz5.zombiezcompanion.modules.map.ZombieZDetector;
+import io.github.keoz5.zombiezcompanion.modules.map.ZombieZMapScreen;
 import io.github.keoz5.zombiezcompanion.modules.players.PlayersOptionsScreen;
 import io.github.keoz5.zombiezcompanion.modules.stats.StatsModule;
 import io.github.keoz5.zombiezcompanion.modules.telemetry.PresenceCache;
 import io.github.keoz5.zombiezcompanion.net.HttpClients;
+import io.github.keoz5.zombiezcompanion.realtime.RealtimeClient;
 import java.net.URI;
+import java.net.URLEncoder;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.multiplayer.ClientPacketListener;
@@ -40,9 +46,14 @@ implements Module {
     private static final long PRESENCE_INTERVAL_MS = 5000L;
     private static final long PRESENCE_REFRESH_MS = 2000L;
     private static final long LEADERBOARD_INTERVAL_MS = 60000L;
-    // Free-tier KV write budget: only broadcast on real movement, with a heartbeat to keep the 120s TTL alive.
+    // Only broadcast on real movement, with a periodic heartbeat so followers' last_update stays fresh.
     private static final double PRESENCE_MOVE_THRESHOLD = 3.0;
     private static final long PRESENCE_HEARTBEAT_MS = 90000L;
+    // Anti-AFK: stop broadcasting presence after this long stationary (within PRESENCE_MOVE_THRESHOLD of
+    // the anchor point) — a stationary player has nothing new to say; skip the pointless resend.
+    private static final long AFK_THRESHOLD_MS = 180000L;
+    // Cap how many uuids /presence/batch fans out per call (mirrors the backend's own cap).
+    private static final int PRESENCE_BATCH_CAP = 50;
     private static final String SERVER_KEY = "rinaorc.com";
     private ConfigManager configManager;
     private long nextPresenceMs;
@@ -53,6 +64,10 @@ implements Module {
     private double lastPostZ;
     private String lastPostDim = "";
     private long lastPostMs;
+    private double afkAnchorX;
+    private double afkAnchorZ;
+    private long afkSinceMs;
+    private boolean afk;
     private static final Pattern PRESTIGE_RE = Pattern.compile("^\\s*\\[?(\\d+)\\]?\\s*");
     private static final Pattern NIV_SUFFIX_RE = Pattern.compile("\\s*Niv\\.?\\s*\\d+\\s*$");
 
@@ -135,16 +150,28 @@ implements Module {
             }
             return;
         }
+        this.updateAfkState(client, now);
         PlayersConfig cfg = this.config();
-        if (cfg.broadcastPosition && now >= this.nextPresenceMs) {
+        boolean shouldBroadcast = cfg.broadcastPosition && !this.afk;
+        if (shouldBroadcast && now >= this.nextPresenceMs) {
             this.maybeSendPresence(client, now);
             this.nextPresenceMs = now + PRESENCE_INTERVAL_MS;
-        } else if (!cfg.broadcastPosition && this.presenceActive) {
+        } else if (!shouldBroadcast && this.presenceActive) {
             this.deletePresence();
             this.presenceActive = false;
         }
-        if ((this.configManager.get().map.showModUsers || FriendsModule.wantsPresenceRefresh() || GroupsModule.wantsPresenceRefresh()) && now >= this.nextRefreshMs) {
+        // Full roster (list-backed) only while the map screen is actually open and showing the "mod
+        // users" layer — that's the only place it's ever rendered (ZombieZMapScreen#renderPresences).
+        // Friends/Groups need a small, known set of members instead, so they use the cheap targeted
+        // /presence/batch endpoint and never touch the roster list().
+        boolean mapOpen = client.screen instanceof ZombieZMapScreen;
+        boolean wantsFullRoster = this.configManager.get().map.showModUsers && mapOpen;
+        boolean wantsBatch = !wantsFullRoster && (FriendsModule.wantsPresenceRefresh() || GroupsModule.wantsPresenceRefresh());
+        if (wantsFullRoster && now >= this.nextRefreshMs) {
             this.refreshPresences();
+            this.nextRefreshMs = now + PRESENCE_REFRESH_MS;
+        } else if (wantsBatch && now >= this.nextRefreshMs) {
+            this.refreshPresencesBatch();
             this.nextRefreshMs = now + PRESENCE_REFRESH_MS;
         }
         if (cfg.broadcastPosition && now >= this.nextLeaderboardMs) {
@@ -207,6 +234,7 @@ implements Module {
             this.presenceActive = false;
         }
         PresenceCache.clear();
+        this.afkSinceMs = 0L;
     }
 
     @Override
@@ -216,12 +244,15 @@ implements Module {
             this.presenceActive = false;
         }
         PresenceCache.clear();
+        this.afkSinceMs = 0L;
     }
 
     /**
-     * Broadcasts presence only when it matters, to stay within the free KV write tier: when the player
-     * first appears, has moved at least {@link #PRESENCE_MOVE_THRESHOLD} blocks, switched map, or when a
-     * heartbeat is due to refresh the server-side 120s TTL. Called at most once per {@link #PRESENCE_INTERVAL_MS}.
+     * Broadcasts presence only when it matters (not every tick): when the player first appears, has
+     * moved at least {@link #PRESENCE_MOVE_THRESHOLD} blocks, switched map, or when a heartbeat is due —
+     * the Hub keeps our position on the WebSocket connection's attachment, no TTL to refresh server-side
+     * anymore, but a periodic resend still helps a follower's client-side cache (last_update) stay fresh.
+     * Called at most once per {@link #PRESENCE_INTERVAL_MS}.
      */
     private void maybeSendPresence(Minecraft client, long now) {
         if (client.player == null) {
@@ -242,34 +273,87 @@ implements Module {
         }
     }
 
+    /**
+     * Broadcasts our position over the realtime WebSocket (Hub Durable Object) instead of a KV-backed
+     * HTTP POST — see RealtimeClient#sendPos. The Hub keeps it on our connection's attachment and serves
+     * it back via GET /presence and /presence/batch; no server-side write happens at all.
+     */
     private void sendPresence(Minecraft client) {
         if (client.player == null) {
             return;
         }
         String dim = client.level != null ? client.level.dimension().identifier().toString() : "";
-        // Canonical (version-stable) id so cross-version friends match this presence; falls back to the
-        // raw session UUID until it resolves.
-        String mcuuid = io.github.keoz5.zombiezcompanion.identity.Identity.self();
-        if (mcuuid == null) mcuuid = client.player.getUUID().toString();
-        String body = String.format(Locale.ROOT, "{\"uuid\":\"%s\",\"name\":\"%s\",\"server\":\"%s\",\"x\":%.1f,\"y\":%.1f,\"z\":%.1f,\"dim\":\"%s\",\"mcuuid\":\"%s\",\"modVersion\":\"%s\"}", PlayersModule.escape(this.selfUuid()), PlayersModule.escape(client.player.getName().getString()), SERVER_KEY, client.player.getX(), client.player.getY(), client.player.getZ(), PlayersModule.escape(dim), PlayersModule.escape(mcuuid), PlayersModule.escape(PlayersModule.modVersion()));
-        this.postAsync(ModInfo.API_BASE + "/presence", body);
+        RealtimeClient.sendPos(client.player.getX(), client.player.getY(), client.player.getZ(), dim, SERVER_KEY);
         this.presenceActive = true;
     }
 
-    private static String modVersion() {
-        return FabricLoader.getInstance().getModContainer(ModInfo.MOD_ID).map(c -> c.getMetadata().getVersion().getFriendlyString()).orElse("?");
-    }
-
     private void deletePresence() {
-        this.deleteAsync(ModInfo.API_BASE + "/presence/" + this.selfUuid());
+        RealtimeClient.sendPosClear();
     }
 
     private void refreshPresences() {
         this.getAsync(ModInfo.API_BASE + "/presence?server=rinaorc.com").thenAccept(resp -> {
             if (resp != null) {
-                PresenceCache.update(resp, this.selfUuid());
+                PresenceCache.update(resp, FriendsModule.selfMcUuid());
             }
         });
+    }
+
+    /**
+     * Targeted refresh for Friends/Groups: only the uuids that are actually needed (visible friends +
+     * current group members), via /presence/batch — a get() per uuid server-side, no roster list().
+     */
+    private void refreshPresencesBatch() {
+        LinkedHashSet<String> uuids = new LinkedHashSet<>();
+        if (FriendsModule.wantsPresenceRefresh()) {
+            FriendsModule fm = FriendsModule.get();
+            for (FriendsCache.Friend f : FriendsCache.friends()) {
+                if (fm == null || fm.isVisible(f.uuid())) {
+                    uuids.add(f.uuid());
+                }
+            }
+        }
+        if (GroupsModule.wantsPresenceRefresh()) {
+            uuids.addAll(GroupsCache.memberUuids());
+        }
+        if (uuids.isEmpty()) {
+            return;
+        }
+        if (uuids.size() > PRESENCE_BATCH_CAP) {
+            LinkedHashSet<String> capped = new LinkedHashSet<>();
+            for (String u : uuids) {
+                if (capped.size() >= PRESENCE_BATCH_CAP) break;
+                capped.add(u);
+            }
+            uuids = capped;
+        }
+        String qs = URLEncoder.encode(String.join(",", uuids), StandardCharsets.UTF_8);
+        this.getAsync(ModInfo.API_BASE + "/presence/batch?uuids=" + qs).thenAccept(resp -> {
+            if (resp != null) {
+                PresenceCache.update(resp, FriendsModule.selfMcUuid());
+            }
+        });
+    }
+
+    /**
+     * Tracks how long the player has been stationary (within {@link #PRESENCE_MOVE_THRESHOLD} blocks of
+     * the anchor). After {@link #AFK_THRESHOLD_MS} without real movement, presence broadcast pauses
+     * (entry deleted, heartbeat stops) — resumes immediately on the next real move.
+     */
+    private void updateAfkState(Minecraft client, long now) {
+        if (client.player == null) {
+            return;
+        }
+        double x = client.player.getX();
+        double z = client.player.getZ();
+        if (this.afkSinceMs == 0L || Math.hypot(x - this.afkAnchorX, z - this.afkAnchorZ) >= PRESENCE_MOVE_THRESHOLD) {
+            this.afkAnchorX = x;
+            this.afkAnchorZ = z;
+            this.afkSinceMs = now;
+            this.afk = false;
+        } else {
+            this.afk = now - this.afkSinceMs >= AFK_THRESHOLD_MS;
+        }
     }
 
     private static String escape(String s) {
@@ -282,16 +366,6 @@ implements Module {
     private void postAsync(String url, String body) {
         try {
             HttpRequest req = HttpRequest.newBuilder().uri(URI.create(url)).timeout(Duration.ofSeconds(5L)).header("Content-Type", "application/json").POST(HttpRequest.BodyPublishers.ofString(body)).build();
-            HttpClients.SHARED.sendAsync(req, HttpResponse.BodyHandlers.discarding()).exceptionally(t -> null);
-        }
-        catch (Exception exception) {
-            // empty catch block
-        }
-    }
-
-    private void deleteAsync(String url) {
-        try {
-            HttpRequest req = HttpRequest.newBuilder().uri(URI.create(url)).timeout(Duration.ofSeconds(5L)).DELETE().build();
             HttpClients.SHARED.sendAsync(req, HttpResponse.BodyHandlers.discarding()).exceptionally(t -> null);
         }
         catch (Exception exception) {

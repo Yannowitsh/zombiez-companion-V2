@@ -2,6 +2,9 @@
 // WebSocket, so the server can push instantly instead of clients polling.
 //   - broadcast(text): center-screen toast to everyone (triggered from a Discord slash command).
 //   - group pings: clients send {type:"ping",...}; relayed only to sockets in the same group.
+//   - presence: clients send {type:"pos",...}; kept on the connection's attachment and read back via
+//     the presences()/presencesFor() RPCs (GET /presence, /presence/batch) — no KV involved. "Online"
+//     is simply "has an open WebSocket"; closing it (webSocketClose, or just going offline) removes it.
 // Uses the Hibernation API (ctx.acceptWebSocket) so idle connections are not billed.
 import { DurableObject } from "cloudflare:workers";
 
@@ -51,6 +54,8 @@ export class Hub extends DurableObject {
       this.relayPing(ws, msg);
     } else if (msg.type === "action") {
       this.relayAction(ws, msg);
+    } else if (msg.type === "pos") {
+      this.setPos(ws, msg);
     }
   }
 
@@ -115,7 +120,61 @@ export class Hub extends DurableObject {
     return { day, count, cap };
   }
 
+  // Full presence roster (GET /presence): every connected socket with a live position, optionally
+  // filtered to one server. In-memory only — no KV List/Read op. Capped like the old KV roster was.
+  presences(server) {
+    const out = [];
+    for (const ws of this.ctx.getWebSockets()) {
+      const a = ws.deserializeAttachment() || {};
+      if (!a.pos || !a.uuid) continue;
+      if (server && a.pos.server && a.pos.server !== server) continue;
+      out.push(this.presenceOf(a));
+      if (out.length >= 300) break;
+    }
+    return out;
+  }
+
+  // Targeted presence lookup (GET /presence/batch) for a known, small set of uuids — Friends/Groups
+  // member tracking. Same in-memory source, just filtered instead of capped.
+  presencesFor(uuids) {
+    const set = new Set((uuids || []).map(String));
+    if (!set.size) return [];
+    const out = [];
+    for (const ws of this.ctx.getWebSockets()) {
+      const a = ws.deserializeAttachment() || {};
+      if (!a.pos || !a.uuid || !set.has(a.uuid)) continue;
+      out.push(this.presenceOf(a));
+    }
+    return out;
+  }
+
   // ---- internal ----
+
+  presenceOf(a) {
+    // uuid === mcuuid here: the WS attachment's uuid is already the canonical account id (see the
+    // "identity" message), unlike the old KV schema's separate per-install telemetry uuid.
+    return {
+      uuid: a.uuid, mcuuid: a.uuid, name: a.name || "?",
+      x: a.pos.x, y: a.pos.y, z: a.pos.z, dim: a.pos.dim, last_update: a.pos.at,
+    };
+  }
+
+  // Client -> server position update ({type:"pos",x,y,z,dim,server}), or {type:"pos",clear:true} to
+  // stop appearing in the roster without closing the socket (AFK / broadcast toggled off).
+  setPos(ws, msg) {
+    const a = ws.deserializeAttachment() || {};
+    if (msg.clear) {
+      delete a.pos;
+    } else {
+      a.pos = {
+        x: Number(msg.x) || 0, y: Number(msg.y) || 0, z: Number(msg.z) || 0,
+        dim: String(msg.dim || "").slice(0, 64),
+        server: String(msg.server || "").slice(0, 64),
+        at: Date.now(),
+      };
+    }
+    ws.serializeAttachment(a);
+  }
 
   // Relay a ping to sockets sharing the sender's group (instant, no KV, no polling).
   relayPing(fromWs, msg) {

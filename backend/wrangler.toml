@@ -52,9 +52,11 @@ name = "WRITE_GLOBAL_LIMITER"
 namespace_id = "1004"
 simple = { limit = 2000, period = 60 }
 
-# Every minute: refresh the "who's online" roster message in Discord (scheduled handler).
+# Every 3 min: refresh the "who's online" roster message in Discord (scheduled handler). Was every
+# minute; the roster doesn't need per-minute accuracy and each run does a KV list() + per-key get()
+# fan-out (see updateRoster) that isn't covered by the /presence edge cache.
 [triggers]
-crons = ["* * * * *"]
+crons = ["*/3 * * * *"]
 
 # Realtime hub: a single Durable Object holds every client's WebSocket for instant push
 # (broadcast toasts + group pings). Requires the Workers paid plan? -> SQLite-backed DOs are

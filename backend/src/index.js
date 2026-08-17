@@ -3,7 +3,8 @@
 // Secret:  DISCORD_WEBHOOK_URL   (set via: wrangler secret put DISCORD_WEBHOOK_URL)
 // Vars:    LATEST_VERSION, DOWNLOAD_URL   (in wrangler.toml [vars])
 
-const PRESENCE_TTL = 120;              // seconds a presence entry stays "online"
+const DEFAULT_SERVER = "rinaorc.com";  // matches PlayersModule.java's SERVER_KEY
+const PRESENCE_BATCH_CAP = 50;         // cap the fan-out on /presence/batch (targeted get()s)
 const PING_TTL = 60 * 60 * 24 * 30;    // 30 days
 const SPAWN_CAP = 500;                 // keep last N spawn timestamps (long history for interval stats)
 const SPAWN_DEDUP_MS = 300000;         // 5 min: ignore near-duplicate spawns (mirrors the mod)
@@ -13,6 +14,14 @@ const MAX_MSG = 5000;
 const json = (obj, status = 200) =>
   new Response(JSON.stringify(obj), { status, headers: { "content-type": "application/json" } });
 const noContent = () => new Response(null, { status: 204 });
+// Same-response-for-everyone endpoints (presence roster, leaderboard): paired with withEdgeCache below,
+// concurrent pollers within maxAge share one Worker invocation + one KV list() instead of one each.
+// Not used on personalized routes.
+const jsonCached = (obj, maxAge) =>
+  new Response(JSON.stringify(obj), {
+    status: 200,
+    headers: { "content-type": "application/json", "cache-control": `public, max-age=${maxAge}` },
+  });
 
 // --- Input validation helpers (reject/bound spoofed or garbage writes) ---
 const isNum = (n) => typeof n === "number" && Number.isFinite(n);
@@ -24,8 +33,20 @@ const cap = (s, max) => String(s == null ? "" : s).slice(0, max);
 // Durable Object class for the realtime hub (WebSocket push). Must be re-exported from the entry module.
 export { Hub } from "./hub.js";
 
+// Workers-only routes have no origin behind them, so zone Cache Rules never see them (they only cache
+// a Worker's *outbound* fetch() subrequests, not its own generated response) — the edge cache has to be
+// driven from inside the Worker via the Cache API. Respects the response's own Cache-Control (jsonCached).
+const withEdgeCache = async (request, ctx, handler) => {
+  const cache = caches.default;
+  const hit = await cache.match(request);
+  if (hit) return hit;
+  const res = await handler();
+  if (res.ok) ctx.waitUntil(cache.put(request, res.clone()));
+  return res;
+};
+
 export default {
-  async fetch(request, env) {
+  async fetch(request, env, ctx) {
     const url = new URL(request.url);
     const path = url.pathname.replace(/\/+$/, "") || "/";
     const method = request.method;
@@ -50,7 +71,9 @@ export default {
         }
         // Hard daily write budget = self-imposed wallet cap on the costly KV path (globally consistent
         // via the single Hub DO). Fail-open on a DO error so a hiccup never blocks all writes.
-        if (env.HUB) {
+        // /presence is exempt too: it's a no-op now (legacy <=1.9.1 clients only, see postPresence) and
+        // doesn't touch KV, so it shouldn't eat into a budget meant to bound real writes.
+        if (env.HUB && path !== "/presence") {
           let ok = true;
           try { ok = await env.HUB.getByName("global").charge(); } catch { ok = true; }
           if (!ok) return json({ error: "budget_exceeded" }, 503);
@@ -73,7 +96,8 @@ export default {
       if (path === "/spawns" && method === "GET") return getSpawns(env);
       if (path === "/spawns/stats" && method === "GET") return getSpawnStats(env);
       if (path === "/spawns" && method === "POST") return postSpawn(request, env);
-      if (path === "/presence" && method === "GET") return getPresence(url, env);
+      if (path === "/presence" && method === "GET") return withEdgeCache(request, ctx, () => getPresence(url, env));
+      if (path === "/presence/batch" && method === "GET") return getPresenceBatch(url, env);
       if (path === "/presence" && method === "POST") return postPresence(request, env);
       if (path.startsWith("/presence/") && method === "DELETE") return delPresence(path, env);
       if (path === "/friends" && method === "GET") return getFriends(url, env);
@@ -101,7 +125,7 @@ export default {
       if (path === "/marchand/offer" && method === "GET") return getMarchandOffer(env);
       if (path === "/marchand/offer" && method === "POST") return postMarchandOffer(request, env);
       if (path === "/leaderboard" && method === "POST") return postLeaderboard(request, env);
-      if (path === "/leaderboard" && method === "GET") return getLeaderboard(env);
+      if (path === "/leaderboard" && method === "GET") return withEdgeCache(request, ctx, () => getLeaderboard(env));
       if (path === "/feedback" && method === "POST") return handleFeedback(request, env);
 
       return json({ error: "not_found" }, 404);
@@ -110,9 +134,9 @@ export default {
     }
   },
 
-  // Cron (every minute): refresh the Discord "who's online" roster message.
+  // Cron (every 3 min): refresh the Discord "who's online" roster message.
   async scheduled(event, env, ctx) {
-    ctx.waitUntil(updateRoster(env));
+    ctx.waitUntil(updateRoster(env, ctx));
   },
 };
 
@@ -261,64 +285,54 @@ async function postSpawn(request, env) {
   return noContent();
 }
 
+// Legacy KV-backed presence write (<=1.9.1 clients only — up-to-date clients broadcast position over
+// the realtime WebSocket instead, see hub.js "pos" handling + Hub#presences). Kept as a harmless no-op
+// (204, same as before) instead of 404 so old clients don't error; they just won't appear in anyone's
+// roster until they update. Deliberate clean break — see presence-cost-investigation notes.
 async function postPresence(request, env) {
-  const b = await readJson(request);
-  if (!b || !b.uuid) return json({ error: "bad_request" }, 400);
-  const uuid = cap(b.uuid, 64);
-  const entry = {
-    uuid, name: cap(b.name || "?", 32), server: cap(b.server, 64),
-    x: clampCoord(b.x), y: clampCoord(b.y), z: clampCoord(b.z), dim: cap(b.dim, 64),
-    mcuuid: cap(b.mcuuid, 64), modVersion: cap(b.modVersion, 32), last_update: Date.now(),
-  };
-  await env.ZZC.put(`presence:${uuid}`, JSON.stringify(entry), { expirationTtl: PRESENCE_TTL });
   return noContent();
 }
 
 async function delPresence(path, env) {
-  const uuid = decodeURIComponent(path.slice("/presence/".length));
-  if (uuid) await env.ZZC.delete(`presence:${uuid}`);
   return noContent();
 }
 
+// Presence now lives entirely in the Hub Durable Object (each connected socket's attachment carries its
+// last-known position, set by the "pos" WS message) instead of Workers KV — no List/Read/Write/Delete
+// ops at all. "Online" is simply "has an open WebSocket", so there's no TTL bookkeeping either.
 async function getPresence(url, env) {
   const server = url.searchParams.get("server");
-  // Cap the fan-out: one GET per key, so bound how many keys a single request can read (legit online
-  // players are well under this; the cap stops an attacker who injected many presence rows from
-  // amplifying KV reads per request).
-  const list = await env.ZZC.list({ prefix: "presence:", limit: 300 });
-  const presences = [];
-  for (const k of list.keys) {
-    const v = await env.ZZC.get(k.name);
-    if (!v) continue;
-    const p = JSON.parse(v);
-    if (server && p.server && p.server !== server) continue;
-    presences.push({
-      uuid: p.uuid, name: p.name, x: p.x, y: p.y || 0, z: p.z,
-      dim: p.dim || "", mcuuid: p.mcuuid || "", last_update: p.last_update,
-    });
-  }
+  const presences = await env.HUB.getByName("global").presences(server);
+  return jsonCached({ presences }, 8);
+}
+
+// Targeted lookup for a known, small set of uuids (Friends/Groups member tracking) — same DO-backed
+// source, filtered to the requested uuids. Not edge-cached (the uuid set is per-caller / personalized).
+async function getPresenceBatch(url, env) {
+  const raw = url.searchParams.get("uuids") || "";
+  const uuids = raw.split(",").map((s) => s.trim()).filter(Boolean).slice(0, PRESENCE_BATCH_CAP);
+  if (!uuids.length) return json({ presences: [] });
+  const presences = await env.HUB.getByName("global").presencesFor(uuids);
   return json({ presences });
 }
 
-// --- "Who's online" Discord roster (cron, every minute) ------------------
-// Edits a single message in the roster channel with the currently-online mod users. presence:* keys
-// auto-expire after PRESENCE_TTL, so listing them yields exactly who is online. The message id is kept
-// in KV so we edit (not spam); if the message was deleted, a new one is created.
+// --- "Who's online" Discord roster (cron, every 3 min) --------------------
+// Edits a single message in the roster channel with the currently-online mod users, sourced from the
+// Hub DO's live connections (see getPresence) — "online" is just "has an open WebSocket", no TTL
+// bookkeeping needed. The message id is kept in KV so we edit (not spam); if the message was deleted,
+// a new one is created.
 const ROSTER_MSG_KEY = "discord:roster_msg";
 
-async function updateRoster(env) {
+async function updateRoster(env, ctx) {
   const webhook = env.DISCORD_ROSTER_WEBHOOK_URL;
   if (!webhook) return;
-  const list = await env.ZZC.list({ prefix: "presence:" });
-  const names = [];
-  for (const k of list.keys) {
-    const v = await env.ZZC.get(k.name);
-    if (!v) continue;
-    try {
-      const p = JSON.parse(v);
-      if (p && p.name) names.push(String(p.name));
-    } catch {}
-  }
+  // Reuse the exact same cached path as GET /presence (same URL => same edge-cache entry) instead of
+  // doing our own separate KV list() + fan-out every run — one shared list() covers both consumers
+  // whenever their timing overlaps within the cache TTL, instead of two independent ones.
+  const req = new Request(`https://zombiez.yannowitsh.dev/presence?server=${DEFAULT_SERVER}`);
+  const res = await withEdgeCache(req, ctx, () => getPresence(new URL(req.url), env));
+  const { presences } = await res.json();
+  const names = presences.map((p) => p.name).filter(Boolean).map(String);
   names.sort((a, b) => a.localeCompare(b));
   const content = rosterContent(names);
 
@@ -389,7 +403,7 @@ async function getLeaderboard(env) {
     if (v) rows.push(JSON.parse(v));
   }
   rows.sort((a, b) => (b.points || 0) - (a.points || 0));
-  return json({ leaderboard: rows });
+  return jsonCached({ leaderboard: rows }, 15);
 }
 
 // --- Discord routing -----------------------------------------------------

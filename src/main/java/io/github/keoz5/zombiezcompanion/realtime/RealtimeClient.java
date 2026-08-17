@@ -144,6 +144,20 @@ public final class RealtimeClient {
         trySend("{\"type\":\"action\",\"action\":\"" + esc(action) + "\",\"arg\":\"" + esc(arg) + "\"}");
     }
 
+    /** Broadcasts our position to the Hub (kept on our connection's attachment; read back via GET
+     *  /presence and /presence/batch). Silently dropped if the socket isn't connected right now — the
+     *  next tick's reconnect (or the next scheduled position send) picks it back up. */
+    public static void sendPos(double x, double y, double z, String dim, String server) {
+        trySend(String.format(java.util.Locale.ROOT,
+            "{\"type\":\"pos\",\"x\":%.1f,\"y\":%.1f,\"z\":%.1f,\"dim\":\"%s\",\"server\":\"%s\"}",
+            x, y, z, esc(dim), esc(server)));
+    }
+
+    /** Stops appearing in the presence roster without closing the socket (AFK / broadcast toggled off). */
+    public static void sendPosClear() {
+        trySend("{\"type\":\"pos\",\"clear\":true}");
+    }
+
     private static String currentGroup() {
         GroupsCache.Group g = GroupsCache.group();
         return g == null ? "" : g.id();
