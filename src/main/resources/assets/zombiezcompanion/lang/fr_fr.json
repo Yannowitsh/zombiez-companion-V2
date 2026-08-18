@@ -479,6 +479,7 @@
   "zombiezcompanion.hud.element.mutant_sensor": "Capteur mutants",
   "zombiezcompanion.hud.element.auto_text_bar": "Barre de textes auto",
   "zombiezcompanion.hud.element.broadcast_toast": "Toast annonce",
+  "zombiezcompanion.hud.element.update_banner": "Bannière mise à jour",
 
   "zombiezcompanion.module.consumables.desc": "Timers HUD pour le Leurre et la Fleur d'Infestation",
   "zombiezcompanion.consumables.options.header": "Consommables — Timers HUD",

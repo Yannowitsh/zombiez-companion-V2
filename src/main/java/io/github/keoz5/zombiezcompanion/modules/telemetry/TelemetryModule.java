@@ -5,11 +5,14 @@ import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import io.github.keoz5.zombiezcompanion.ZombieZCompanionClient;
 import io.github.keoz5.zombiezcompanion.config.ConfigManager;
+import io.github.keoz5.zombiezcompanion.config.HudConfig;
 import io.github.keoz5.zombiezcompanion.config.TelemetryConfig;
 import io.github.keoz5.zombiezcompanion.core.Module;
 import io.github.keoz5.zombiezcompanion.core.ModuleCategory;
 import io.github.keoz5.zombiezcompanion.core.ModuleContext;
 import io.github.keoz5.zombiezcompanion.core.ModuleManager;
+import io.github.keoz5.zombiezcompanion.hud.HudAnchor;
+import io.github.keoz5.zombiezcompanion.hud.HudElements;
 import io.github.keoz5.zombiezcompanion.net.HttpClients;
 import java.net.URI;
 import java.net.http.HttpRequest;
@@ -36,6 +39,7 @@ import net.minecraft.sounds.SoundEvents;
 public final class TelemetryModule
 implements Module {
     public static final String ID = "telemetry";
+    public static final String HUD_ELEMENT = "update_banner";
     private static final String ENDPOINT = ModInfo.API_BASE;
     private static final long PING_INTERVAL_MS = 86400000L;
     private static final long FIRST_DELAY_MS = 30000L;
@@ -216,21 +220,28 @@ implements Module {
             return;
         }
         Font tr = mc.font;
-        int sw = ctx.guiWidth();
-        int sh = ctx.guiHeight();
         MutableComponent line1 = Component.translatable((String)"zombiezcompanion.update.banner.title", (Object[])new Object[]{this.latestVersion});
         MutableComponent line2 = Component.translatable((String)"zombiezcompanion.update.banner.sub");
         int textW = Math.max(tr.width((FormattedText)line1), tr.width((FormattedText)line2));
-        int half = textW / 2 + 12;
-        float scale = 1.6f;
+        int baseW = textW + 24;
+        int baseH = 34;
+        HudConfig hud = this.configManager.get().hud;
+        double scale = HudAnchor.scale(hud, HUD_ELEMENT);
+        int sw = (int)Math.round((double)baseW * scale);
+        int sh = (int)Math.round((double)baseH * scale);
+        int x = HudAnchor.resolveX(hud, HUD_ELEMENT, ctx.guiWidth(), sw, 0.5);
+        int y = HudAnchor.resolveY(hud, HUD_ELEMENT, ctx.guiHeight(), sh, 0.24);
+        HudElements.report(HUD_ELEMENT, x, y, sw, sh);
         ctx.pose().pushMatrix();
-        io.github.keoz5.zombiezcompanion.compat.ZCPose.translate(ctx, (float)((double)sw / 2.0), (float)((double)sh * 0.3));
-        io.github.keoz5.zombiezcompanion.compat.ZCPose.scale(ctx, scale, scale);
-        ctx.fill(-half, -4, half, 30, -804647918);
-        ctx.fill(-half, -4, half, -1, -19712);
-        ctx.outline(-half, -4, half * 2, 34, -19712);
-        ctx.centeredText(tr, (Component)line1, 0, 3, -10934);
-        ctx.centeredText(tr, (Component)line2, 0, 16, -1);
+        io.github.keoz5.zombiezcompanion.compat.ZCPose.translate(ctx, (float)x, (float)y);
+        if (scale != 1.0) {
+            io.github.keoz5.zombiezcompanion.compat.ZCPose.scale(ctx, (float)scale, (float)scale);
+        }
+        ctx.fill(0, 0, baseW, baseH, -804647918);
+        ctx.fill(0, 0, baseW, 3, -19712);
+        ctx.outline(0, 0, baseW, baseH, -19712);
+        ctx.centeredText(tr, (Component)line1, baseW / 2, 7, -10934);
+        ctx.centeredText(tr, (Component)line2, baseW / 2, 20, -1);
         ctx.pose().popMatrix();
     }
 

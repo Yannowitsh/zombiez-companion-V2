@@ -102,6 +102,7 @@ implements ClientModInitializer {
         HudElements.register("mutant_sensor", "zombiezcompanion.hud.element.mutant_sensor", 140, 16, 0.0, 0.54, true);
         HudElements.register("auto_text_bar", "zombiezcompanion.hud.element.auto_text_bar", 100, 22, 0.01, 0.30, false);
         HudElements.register("broadcast_toast", "zombiezcompanion.hud.element.broadcast_toast", 260, 40, 0.5, 0.12, true);
+        HudElements.register("update_banner", "zombiezcompanion.hud.element.update_banner", 280, 34, 0.5, 0.24, true);
     }
 
     /**

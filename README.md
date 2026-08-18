@@ -44,6 +44,11 @@ Historique des modifications par version. Nom du jar :
 `zombiezcompanionV2-<version_minecraft>-<version_mod>`. Depuis 1.8.0, deux jars par version
 (26.1.2 et 1.21.4) ; l'updater in-mod lit le canal correspondant (branche `26.1.2` ou `master`).
 
+### 1.10.1
+- **Bannière de mise à jour déplaçable** : la notification « mise à jour disponible » se personnalise
+  désormais depuis le bouton de customisation HUD comme les autres éléments (position, taille), au lieu
+  d'être fixe. Position par défaut : juste au-dessus du timer Marchand.
+
 ### 1.10.0
 - **Statut en ligne corrigé pendant l'AFK** : rester immobile plus de 3 min ne fait plus disparaître de
   Discord ni de la liste d'amis — la diffusion de position se met en pause, mais la position affichée
