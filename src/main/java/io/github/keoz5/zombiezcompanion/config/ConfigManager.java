@@ -197,9 +197,6 @@ public final class ConfigManager {
     }
 
     private static void migrate(ModConfig cfg, int fromVersion) {
-        if (fromVersion < 2) {
-            ConfigManager.migrateToV2(cfg);
-        }
         if (fromVersion < 5) {
             ConfigManager.migrateToV5(cfg);
         }
@@ -210,12 +207,6 @@ public final class ConfigManager {
             ConfigManager.migrateToV7(cfg);
         }
         ConfigManager.purgeOrphanWaypoints(cfg);
-    }
-
-    private static void migrateToV2(ModConfig cfg) {
-        if (cfg.map.miniMapCorner == 1) {
-            cfg.map.miniMapCorner = 3;
-        }
     }
 
     private static void migrateToV5(ModConfig cfg) {
@@ -255,9 +246,6 @@ public final class ConfigManager {
     }
 
     private static void clampRanges(ModConfig cfg) {
-        if (cfg.map.miniMapCorner < 0 || cfg.map.miniMapCorner > 3) {
-            cfg.map.miniMapCorner = 3;
-        }
         if (cfg.map.waypointHudPosition < 0 || cfg.map.waypointHudPosition > 3) {
             cfg.map.waypointHudPosition = 0;
         }

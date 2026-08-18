@@ -435,9 +435,6 @@ extends Screen {
     }
 
     private String moduleGlyph(Module module) {
-        if ("mini_map".equals(module.id())) {
-            return "MAP";
-        }
         if ("waypoints".equals(module.id())) {
             return "WP";
         }

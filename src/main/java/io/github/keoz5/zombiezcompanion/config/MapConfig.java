@@ -13,12 +13,6 @@ public final class MapConfig {
     public int waypointHudPosition = 0;
     public int waypointMarkerStyle = 0;
     public boolean autoDeathWaypoint = true;
-    public boolean showModUsers = true;
-    public int miniMapSize = 80;
-    public int miniMapPeekSize = 200;
-    public double miniMapZoom = 0.25;
-    public int miniMapCorner = 3;
-    public int miniMapOffsetY = 0;
     public GuideTarget guideTarget = null;
     public List<Waypoint> waypoints = new ArrayList<Waypoint>();
 

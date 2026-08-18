@@ -461,27 +461,13 @@ implements Module {
     private int[] guidePosition(GuiGraphicsExtractor ctx, int boxW, int boxH) {
         int y;
         int x;
-        MapConfig cfg = this.config();
         int windowW = ctx.guiWidth();
         int windowH = ctx.guiHeight();
-        int miniSize = Math.max(80, Math.min(260, cfg.miniMapSize));
         int margin = 8;
-        int miniX = switch (cfg.miniMapCorner) {
-            case 0, 2 -> margin;
-            default -> windowW - miniSize - margin;
-        };
-        int miniY = switch (cfg.miniMapCorner) {
-            case 2, 3 -> windowH - miniSize - margin;
-            default -> margin;
-        };
-        int miniOffset = Math.max(-200, Math.min(200, cfg.miniMapOffsetY));
-        miniY = Math.max(0, Math.min(windowH - miniSize, miniY + miniOffset));
-        switch (cfg.waypointHudPosition) {
+        switch (this.config().waypointHudPosition) {
             case 1: {
-                x = miniX - boxW - 8;
-                y = miniY + miniSize / 2 - boxH / 2;
-                if (x >= margin) break;
-                x = miniX + miniSize + 8;
+                x = margin;
+                y = margin;
                 break;
             }
             case 2: {
@@ -495,10 +481,8 @@ implements Module {
                 break;
             }
             default: {
-                x = miniX + miniSize - boxW;
-                y = miniY - boxH - 8;
-                if (y >= margin) break;
-                y = miniY + miniSize + 8;
+                x = windowW - boxW - margin;
+                y = margin;
             }
         }
         x = Math.max(margin, Math.min(windowW - boxW - margin, x));
@@ -512,10 +496,10 @@ implements Module {
 
     static String positionLabel(int position) {
         String key = switch (position) {
-            case 1 -> "zombiezcompanion.waypoint.position.left_minimap";
+            case 1 -> "zombiezcompanion.waypoint.position.top_left";
             case 2 -> "zombiezcompanion.waypoint.position.top_center";
             case 3 -> "zombiezcompanion.waypoint.position.bottom_center";
-            default -> "zombiezcompanion.waypoint.position.above_minimap";
+            default -> "zombiezcompanion.waypoint.position.top_right";
         };
         return Component.translatable((String)key).getString();
     }

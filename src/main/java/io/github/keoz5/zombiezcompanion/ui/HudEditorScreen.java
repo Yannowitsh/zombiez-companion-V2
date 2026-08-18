@@ -98,18 +98,12 @@ extends Screen {
     /*public boolean mouseDragged(double mouseX, double mouseY, int button, double dx, double dy) {
     *///?}
         if (this.resizing != null) {
-            if (this.resizing.element.id.equals("mini_map")) {
-                int newSize = (int)Math.round(Math.max(mouseX - (double)this.resizing.x, mouseY - (double)this.resizing.y));
-                this.resizing.w = newSize = Math.max(80, Math.min(260, newSize));
-                this.resizing.h = newSize;
-            } else {
-                double rw = (mouseX - (double)this.resizing.x) / this.resizing.baseW;
-                double rh = (mouseY - (double)this.resizing.y) / this.resizing.baseH;
-                double s = Math.max(rw, rh);
-                this.resizing.scale = s = Math.max(0.5, Math.min(3.0, s));
-                this.resizing.w = Math.max(8, (int)Math.round(this.resizing.baseW * s));
-                this.resizing.h = Math.max(8, (int)Math.round(this.resizing.baseH * s));
-            }
+            double rw = (mouseX - (double)this.resizing.x) / this.resizing.baseW;
+            double rh = (mouseY - (double)this.resizing.y) / this.resizing.baseH;
+            double s = Math.max(rw, rh);
+            this.resizing.scale = s = Math.max(0.5, Math.min(3.0, s));
+            this.resizing.w = Math.max(8, (int)Math.round(this.resizing.baseW * s));
+            this.resizing.h = Math.max(8, (int)Math.round(this.resizing.baseH * s));
             this.resizing.x = HudEditorScreen.clamp(this.resizing.x, 0, Math.max(0, this.width - this.resizing.w));
             this.resizing.y = HudEditorScreen.clamp(this.resizing.y, 0, Math.max(0, this.height - this.resizing.h));
             return true;
@@ -136,11 +130,7 @@ extends Screen {
     /*public boolean mouseReleased(double mouseX, double mouseY, int button) {
     *///?}
         if (this.resizing != null) {
-            if (this.resizing.element.id.equals("mini_map")) {
-                this.configManager.get().map.miniMapSize = this.resizing.w;
-            } else {
-                HudAnchor.setScale(this.configManager.get().hud, this.resizing.element.id, this.resizing.scale);
-            }
+            HudAnchor.setScale(this.configManager.get().hud, this.resizing.element.id, this.resizing.scale);
             HudAnchor.setPosition(this.configManager.get().hud, this.resizing.element.id, this.resizing.x, this.resizing.y, this.resizing.w, this.resizing.h, this.width, this.height);
             this.configManager.save();
             this.resizing = null;
@@ -218,7 +208,7 @@ extends Screen {
             ctx.fill(hx, hy, box.x + box.w, box.y + box.h, hoverHandle ? -9534721 : -863333438);
             ctx.outline(hx, hy, 9, 9, -8874241);
             if (!active && !hovered) continue;
-            String tag = box.element.id.equals("mini_map") ? box.w + " px" : Math.round(box.scale * 100.0) + "%";
+            String tag = Math.round(box.scale * 100.0) + "%";
             ctx.text(this.font, tag, box.x + 2, box.y - 10, -8874241);
         }
         ctx.centeredText(this.font, (Component)Component.translatable((String)"zombiezcompanion.hud.editor.title"), this.width / 2, 14, -854792);

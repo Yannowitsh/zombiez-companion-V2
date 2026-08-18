@@ -4,7 +4,6 @@ import io.github.keoz5.zombiezcompanion.config.ConfigManager;
 import io.github.keoz5.zombiezcompanion.config.MapConfig;
 import io.github.keoz5.zombiezcompanion.modules.map.WaypointDeleteConfirmScreen;
 import io.github.keoz5.zombiezcompanion.modules.map.WaypointEditScreen;
-import io.github.keoz5.zombiezcompanion.modules.map.ZombieZMapScreen;
 import io.github.keoz5.zombiezcompanion.ui.widget.StyledButton;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -80,16 +79,13 @@ extends Screen {
         for (int visibleIndex = 0; visibleIndex < maxRows && (index = this.scrollOffset + visibleIndex) < waypoints.size(); ++visibleIndex) {
             MapConfig.Waypoint waypoint = waypoints.get(index);
             int y = startY + visibleIndex * 34;
-            StyledButton visibilityButton = new StyledButton(this.panelX + this.panelW - 262, y + 6, 66, 18, this.visibilityLabel(waypoint), button -> this.toggleWaypointVisible(waypoint), waypoint.visible ? -14867392 : -266723542, waypoint.visible ? -11441921 : -265932737, -854792);
-            StyledButton mapButton = new StyledButton(this.panelX + this.panelW - 190, y + 6, 50, 18, (Component)Component.translatable((String)"zombiezcompanion.waypoint.manager.row.map"), button -> this.openOnMap(waypoint), -14867392, -11441921, -854792);
+            StyledButton visibilityButton = new StyledButton(this.panelX + this.panelW - 206, y + 6, 66, 18, this.visibilityLabel(waypoint), button -> this.toggleWaypointVisible(waypoint), waypoint.visible ? -14867392 : -266723542, waypoint.visible ? -11441921 : -265932737, -854792);
             StyledButton editButton = new StyledButton(this.panelX + this.panelW - 134, y + 6, 54, 18, (Component)Component.translatable((String)"zombiezcompanion.waypoint.manager.row.edit"), button -> this.editWaypoint(waypoint), -266723542, -265932737, -854792);
             StyledButton deleteButton = new StyledButton(this.panelX + this.panelW - 74, y + 6, 58, 18, (Component)Component.translatable((String)"zombiezcompanion.waypoint.manager.row.delete"), button -> this.confirmDelete(waypoint), -12965328, -11716288, -854792);
             this.rowButtons.add(visibilityButton);
-            this.rowButtons.add(mapButton);
             this.rowButtons.add(editButton);
             this.rowButtons.add(deleteButton);
             this.addRenderableWidget(visibilityButton);
-            this.addRenderableWidget(mapButton);
             this.addRenderableWidget(editButton);
             this.addRenderableWidget(deleteButton);
         }
@@ -127,12 +123,6 @@ extends Screen {
         }
         this.configManager.save();
         this.rebuildRows();
-    }
-
-    private void openOnMap(MapConfig.Waypoint waypoint) {
-        if (this.minecraft != null) {
-            this.minecraft.setScreen((Screen)new ZombieZMapScreen(this.configManager, waypoint.x, waypoint.z));
-        }
     }
 
     private void editWaypoint(MapConfig.Waypoint waypoint) {

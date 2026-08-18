@@ -48,7 +48,6 @@ extends ModuleOptionsScreen {
         this.addRenderableWidget(new StyledButton(x, y + 138, optionW, 20, (Component)Component.translatable((String)"zombiezcompanion.waypoint.open_manager"), button -> Minecraft.getInstance().setScreen((Screen)new WaypointManagerScreen(this, this.configManager)), -266723542, -265932737, -854792));
         this.addKeybindRow(x, y + 168, optionW, Keybinds.openWaypoints(), (Component)Component.translatable((String)"key.zombiezcompanion.open_waypoints"));
         this.addKeybindRow(x, y + 194, optionW, Keybinds.clearGuide(), (Component)Component.translatable((String)"key.zombiezcompanion.clear_guide"));
-        this.addCrossLink(x, y + 224, optionW, "mini_map", (Component)Component.translatable((String)"zombiezcompanion.crosslink.mini_map"));
     }
 
     private Component styleButtonLabel() {

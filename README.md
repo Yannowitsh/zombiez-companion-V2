@@ -44,6 +44,18 @@ Historique des modifications par version. Nom du jar :
 `zombiezcompanionV2-<version_minecraft>-<version_mod>`. Depuis 1.8.0, deux jars par version
 (26.1.2 et 1.21.4) ; l'updater in-mod lit le canal correspondant (branche `26.1.2` ou `master`).
 
+### 1.10.0
+- **Statut en ligne corrigé pendant l'AFK** : rester immobile plus de 3 min ne fait plus disparaître de
+  Discord ni de la liste d'amis — la diffusion de position se met en pause, mais la position affichée
+  reste exacte puisqu'elle n'a pas changé.
+- **Carte plein écran retirée** : redondante avec la carte déjà fournie par le serveur, et source de
+  requêtes réseau inutiles. Le guidage vers un waypoint ou un crâne reste disponible depuis leurs
+  propres écrans (Gestionnaire de waypoints, Crânes).
+- **Optimisation réseau** : Amis & Groupe ne rafraîchit plus en continu en arrière-plan — uniquement
+  pendant que cet écran est réellement ouvert.
+- **Touches rapides** (non assignées par défaut, configurables dans les raccourcis clavier) : ouverture
+  directe d'Amis & Groupe, d'AutoText, et du Traqueur de mobs.
+
 ### 1.9.3
 - **Présence migrée vers le hub temps réel** : la carte, le statut en ligne des amis, le TP rapide et le
   badge « utilise le mod » passent désormais par le **WebSocket** déjà utilisé pour le suivi de groupe,

@@ -17,7 +17,6 @@ import io.github.keoz5.zombiezcompanion.modules.groups.GroupsModule;
 import io.github.keoz5.zombiezcompanion.modules.map.WaypointManagerScreen;
 import io.github.keoz5.zombiezcompanion.modules.map.WaypointsModule;
 import io.github.keoz5.zombiezcompanion.modules.map.ZombieZMapData;
-import io.github.keoz5.zombiezcompanion.modules.map.ZombieZMapScreen;
 import io.github.keoz5.zombiezcompanion.modules.minievents.MiniEventsModule;
 import io.github.keoz5.zombiezcompanion.modules.mobsensor.MobSensorModule;
 import io.github.keoz5.zombiezcompanion.modules.players.PlayersModule;
@@ -69,7 +68,7 @@ implements ClientModInitializer {
         Keybinds.register(() -> {
             Minecraft client = Minecraft.getInstance();
             client.setScreen((Screen)new ConfigScreen(null, configManager, moduleManager));
-        }, () -> Minecraft.getInstance().setScreen((Screen)new ZombieZMapScreen(configManager)), () -> {
+        }, () -> {
             if (moduleManager.isEnabled("waypoints")) {
                 Minecraft.getInstance().setScreen((Screen)new WaypointManagerScreen(null, configManager));
             }
@@ -86,7 +85,7 @@ implements ClientModInitializer {
         }, ZombieZCompanionClient::tpToEventRefuge, () -> {
             // Ping input (tap vs hold-for-wheel) is polled from GLFW in GroupsModule.onClientTick, so the
             // press callback itself is a no-op; the keybind stays registered for binding/display.
-        });
+        }, () -> ZombieZCompanionClient.openModuleScreen(moduleManager, GroupsModule.ID), () -> ZombieZCompanionClient.openModuleScreen(moduleManager, AutoTextModule.ID), () -> ZombieZCompanionClient.openModuleScreen(moduleManager, MobSensorModule.ID));
         moduleManager.startEnabledModules();
         configManager.save();
         Log.info("ZombieZ Companion initialized \u2014 " + moduleManager.modules().size() + " module(s), debug=" + ZombieZCompanionClient.configManager.get().debugMode);
@@ -194,6 +193,19 @@ implements ClientModInitializer {
         ctx.fill(x, y, x + w, y + 14, -1442840576);
         ctx.fill(x, y, x + w, y + 1, -256);
         ctx.text(f, (Component)line, x + 8, y + 3, -256, false);
+    }
+
+    /** Quick-access keybinds: open a module's screen by id, if the module is enabled and offers one. */
+    private static void openModuleScreen(ModuleManager mm, String moduleId) {
+        if (!mm.isEnabled(moduleId)) {
+            return;
+        }
+        mm.findById(moduleId).ifPresent(m -> {
+            Screen s = m.createOptionsScreen(null);
+            if (s != null) {
+                Minecraft.getInstance().setScreen(s);
+            }
+        });
     }
 
     private static void tpToEventRefuge() {

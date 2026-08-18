@@ -6,7 +6,6 @@ import java.util.List;
 import java.util.Map;
 
 public final class HudElements {
-    public static final String MINI_MAP = "mini_map";
     public static final String COORDINATES = "coordinates";
     public static final String MINI_EVENTS_TOAST = "mini_events_toast";
     public static final String DROP_NOTIFICATIONS = "drop_notifications";

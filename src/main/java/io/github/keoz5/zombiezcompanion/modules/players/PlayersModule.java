@@ -13,8 +13,8 @@ import io.github.keoz5.zombiezcompanion.modules.friends.FriendsCache;
 import io.github.keoz5.zombiezcompanion.modules.friends.FriendsModule;
 import io.github.keoz5.zombiezcompanion.modules.groups.GroupsCache;
 import io.github.keoz5.zombiezcompanion.modules.groups.GroupsModule;
+import io.github.keoz5.zombiezcompanion.modules.groups.GroupsScreen;
 import io.github.keoz5.zombiezcompanion.modules.map.ZombieZDetector;
-import io.github.keoz5.zombiezcompanion.modules.map.ZombieZMapScreen;
 import io.github.keoz5.zombiezcompanion.modules.players.PlayersOptionsScreen;
 import io.github.keoz5.zombiezcompanion.modules.stats.StatsModule;
 import io.github.keoz5.zombiezcompanion.modules.telemetry.PresenceCache;
@@ -152,25 +152,24 @@ implements Module {
         }
         this.updateAfkState(client, now);
         PlayersConfig cfg = this.config();
-        boolean shouldBroadcast = cfg.broadcastPosition && !this.afk;
-        if (shouldBroadcast && now >= this.nextPresenceMs) {
-            this.maybeSendPresence(client, now);
-            this.nextPresenceMs = now + PRESENCE_INTERVAL_MS;
-        } else if (!shouldBroadcast && this.presenceActive) {
+        if (cfg.broadcastPosition) {
+            // AFK: skip resends but leave the last known position on the Hub attachment — it's still
+            // accurate (we haven't moved), and keeping it is what lets us stay "online" for Discord/
+            // friends while stationary instead of vanishing after AFK_THRESHOLD_MS.
+            if (!this.afk && now >= this.nextPresenceMs) {
+                this.maybeSendPresence(client, now);
+                this.nextPresenceMs = now + PRESENCE_INTERVAL_MS;
+            }
+        } else if (this.presenceActive) {
             this.deletePresence();
             this.presenceActive = false;
         }
-        // Full roster (list-backed) only while the map screen is actually open and showing the "mod
-        // users" layer — that's the only place it's ever rendered (ZombieZMapScreen#renderPresences).
-        // Friends/Groups need a small, known set of members instead, so they use the cheap targeted
-        // /presence/batch endpoint and never touch the roster list().
-        boolean mapOpen = client.screen instanceof ZombieZMapScreen;
-        boolean wantsFullRoster = this.configManager.get().map.showModUsers && mapOpen;
-        boolean wantsBatch = !wantsFullRoster && (FriendsModule.wantsPresenceRefresh() || GroupsModule.wantsPresenceRefresh());
-        if (wantsFullRoster && now >= this.nextRefreshMs) {
-            this.refreshPresences();
-            this.nextRefreshMs = now + PRESENCE_REFRESH_MS;
-        } else if (wantsBatch && now >= this.nextRefreshMs) {
+        // Friends/Groups presence needs only a small, known set of members, and only while the Amis &
+        // Groupe screen is actually open to look at it — the targeted /presence/batch endpoint, gated
+        // on screen visibility instead of polling in the background for the whole play session.
+        boolean groupsScreenOpen = client.screen instanceof GroupsScreen;
+        boolean wantsBatch = groupsScreenOpen && (FriendsModule.wantsPresenceRefresh() || GroupsModule.wantsPresenceRefresh());
+        if (wantsBatch && now >= this.nextRefreshMs) {
             this.refreshPresencesBatch();
             this.nextRefreshMs = now + PRESENCE_REFRESH_MS;
         }
@@ -291,14 +290,6 @@ implements Module {
         RealtimeClient.sendPosClear();
     }
 
-    private void refreshPresences() {
-        this.getAsync(ModInfo.API_BASE + "/presence?server=rinaorc.com").thenAccept(resp -> {
-            if (resp != null) {
-                PresenceCache.update(resp, FriendsModule.selfMcUuid());
-            }
-        });
-    }
-
     /**
      * Targeted refresh for Friends/Groups: only the uuids that are actually needed (visible friends +
      * current group members), via /presence/batch — a get() per uuid server-side, no roster list().
@@ -337,8 +328,9 @@ implements Module {
 
     /**
      * Tracks how long the player has been stationary (within {@link #PRESENCE_MOVE_THRESHOLD} blocks of
-     * the anchor). After {@link #AFK_THRESHOLD_MS} without real movement, presence broadcast pauses
-     * (entry deleted, heartbeat stops) — resumes immediately on the next real move.
+     * the anchor). After {@link #AFK_THRESHOLD_MS} without real movement, presence broadcast pauses (no
+     * more sends/heartbeat) but the last known position stays on the Hub — still online, just not
+     * resending an unchanged position. Resumes immediately on the next real move.
      */
     private void updateAfkState(Minecraft client, long now) {
         if (client.player == null) {

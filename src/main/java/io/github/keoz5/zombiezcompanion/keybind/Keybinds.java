@@ -18,34 +18,34 @@ public final class Keybinds {
     /*private static final String CATEGORY = "key.categories.zombiezcompanion.main";
     *///?}
     private static KeyMapping openMenu;
-    private static KeyMapping openMap;
     private static KeyMapping openWaypoints;
     private static KeyMapping openStats;
     private static KeyMapping clearGuide;
     private static KeyMapping openSkulls;
     private static KeyMapping tpRefuge;
     private static KeyMapping pingGroup;
+    private static KeyMapping openFriends;
+    private static KeyMapping openAutoText;
+    private static KeyMapping openMobSensor;
 
     private Keybinds() {
     }
 
-    public static void register(Runnable onMenuPressed, Runnable onMapPressed, Runnable onWaypointsPressed, Runnable onStatsPressed, Runnable onClearGuidePressed, Runnable onSkullsPressed, Runnable onTpRefugePressed, Runnable onPingPressed) {
+    public static void register(Runnable onMenuPressed, Runnable onWaypointsPressed, Runnable onStatsPressed, Runnable onClearGuidePressed, Runnable onSkullsPressed, Runnable onTpRefugePressed, Runnable onPingPressed, Runnable onFriendsPressed, Runnable onAutoTextPressed, Runnable onMobSensorPressed) {
         openMenu = KeyMappingHelper.registerKeyMapping((KeyMapping)new KeyMapping("key.zombiezcompanion.open_menu", InputConstants.Type.KEYSYM, 344, CATEGORY));
-        openMap = KeyMappingHelper.registerKeyMapping((KeyMapping)new KeyMapping("key.zombiezcompanion.open_map", InputConstants.Type.KEYSYM, 77, CATEGORY));
         openWaypoints = KeyMappingHelper.registerKeyMapping((KeyMapping)new KeyMapping("key.zombiezcompanion.open_waypoints", InputConstants.Type.KEYSYM, 78, CATEGORY));
         openStats = KeyMappingHelper.registerKeyMapping((KeyMapping)new KeyMapping("key.zombiezcompanion.open_stats", InputConstants.Type.KEYSYM, 74, CATEGORY));
         clearGuide = KeyMappingHelper.registerKeyMapping((KeyMapping)new KeyMapping("key.zombiezcompanion.clear_guide", InputConstants.Type.KEYSYM, 71, CATEGORY));
         openSkulls = KeyMappingHelper.registerKeyMapping((KeyMapping)new KeyMapping("key.zombiezcompanion.open_skulls", InputConstants.Type.KEYSYM, 75, CATEGORY));
         tpRefuge = KeyMappingHelper.registerKeyMapping((KeyMapping)new KeyMapping("key.zombiezcompanion.tp_refuge", InputConstants.Type.KEYSYM, -1, CATEGORY));
         pingGroup = KeyMappingHelper.registerKeyMapping((KeyMapping)new KeyMapping("key.zombiezcompanion.ping_group", InputConstants.Type.KEYSYM, -1, CATEGORY));
+        openFriends = KeyMappingHelper.registerKeyMapping((KeyMapping)new KeyMapping("key.zombiezcompanion.open_friends", InputConstants.Type.KEYSYM, -1, CATEGORY));
+        openAutoText = KeyMappingHelper.registerKeyMapping((KeyMapping)new KeyMapping("key.zombiezcompanion.open_auto_text", InputConstants.Type.KEYSYM, -1, CATEGORY));
+        openMobSensor = KeyMappingHelper.registerKeyMapping((KeyMapping)new KeyMapping("key.zombiezcompanion.open_mob_sensor", InputConstants.Type.KEYSYM, -1, CATEGORY));
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
             while (openMenu.consumeClick()) {
                 if (client.screen != null) continue;
                 onMenuPressed.run();
-            }
-            while (openMap.consumeClick()) {
-                if (client.screen != null) continue;
-                onMapPressed.run();
             }
             while (openWaypoints.consumeClick()) {
                 if (client.screen != null) continue;
@@ -71,6 +71,18 @@ public final class Keybinds {
                 if (client.screen != null) continue;
                 onPingPressed.run();
             }
+            while (openFriends.consumeClick()) {
+                if (client.screen != null) continue;
+                onFriendsPressed.run();
+            }
+            while (openAutoText.consumeClick()) {
+                if (client.screen != null) continue;
+                onAutoTextPressed.run();
+            }
+            while (openMobSensor.consumeClick()) {
+                if (client.screen != null) continue;
+                onMobSensorPressed.run();
+            }
         });
     }
 
@@ -84,10 +96,6 @@ public final class Keybinds {
 
     public static KeyMapping openMenu() {
         return openMenu;
-    }
-
-    public static KeyMapping openMap() {
-        return openMap;
     }
 
     public static KeyMapping openWaypoints() {
@@ -112,6 +120,18 @@ public final class Keybinds {
 
     public static KeyMapping pingGroup() {
         return pingGroup;
+    }
+
+    public static KeyMapping openFriends() {
+        return openFriends;
+    }
+
+    public static KeyMapping openAutoText() {
+        return openAutoText;
+    }
+
+    public static KeyMapping openMobSensor() {
+        return openMobSensor;
     }
 
     /**
@@ -143,9 +163,6 @@ public final class Keybinds {
         if (openMenu != null) {
             list.add(openMenu);
         }
-        if (openMap != null) {
-            list.add(openMap);
-        }
         if (openWaypoints != null) {
             list.add(openWaypoints);
         }
@@ -163,6 +180,15 @@ public final class Keybinds {
         }
         if (pingGroup != null) {
             list.add(pingGroup);
+        }
+        if (openFriends != null) {
+            list.add(openFriends);
+        }
+        if (openAutoText != null) {
+            list.add(openAutoText);
+        }
+        if (openMobSensor != null) {
+            list.add(openMobSensor);
         }
         return list;
     }
